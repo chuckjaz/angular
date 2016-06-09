@@ -13,12 +13,13 @@ import { HeroService }         from './hero.service';
 @Component({
   selector: 'my-app',
 
-  template: \`
-    <h1>{{title}}</h1>
-    <nav>
+  template: \`~{empty}
+    <~{start-tag}h~{start-tag-after-h}1~{start-tag-h1}>~{h1-content}{{title}}</~{end-tag-h1}h1>
+    ~{after-h1}<nav>
       <a [routerLink]="['Dashboard']">Dashboard</a>
       <a [routerLink]="['Heroes']">Heroes</a>
     </nav>
+    &~{entity-amp}amp;
     <router-outlet></router-outlet>
   \`,
   styleUrls: ['app/app.component.css'],

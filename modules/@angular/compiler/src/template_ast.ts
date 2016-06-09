@@ -229,6 +229,7 @@ export enum PropertyBindingType {
  * A visitor for {@link TemplateAst} trees that will process each node.
  */
 export interface TemplateAstVisitor {
+  visit?(ast: TemplateAst, context: any): any;
   visitNgContent(ast: NgContentAst, context: any): any;
   visitEmbeddedTemplate(ast: EmbeddedTemplateAst, context: any): any;
   visitElement(ast: ElementAst, context: any): any;
@@ -250,10 +251,74 @@ export function templateVisitAll(
     visitor: TemplateAstVisitor, asts: TemplateAst[], context: any = null): any[] {
   var result: any[] = [];
   asts.forEach(ast => {
-    var astResult = ast.visit(visitor, context);
+    var astResult = (visitor.visit && visitor.visit(ast, context)) || ast.visit(visitor, context);
     if (isPresent(astResult)) {
       result.push(astResult);
     }
   });
   return result;
+}
+
+export function templateVisitEachChild(
+    visitor: TemplateAstVisitor, node: TemplateAst, context: any = null): any[] {
+  return node.visit(new TemplateAstChildVisitor(visitor), context);
+}
+
+export class TemplateAstChildVisitor implements TemplateAstVisitor {
+  constructor(private visitor?: TemplateAstVisitor) {}
+
+  // Nodes with children
+  visitEmbeddedTemplate(ast: EmbeddedTemplateAst, context: any): any {
+    return this.visitChildren(context, visit => {
+      visit(ast.attrs);
+      visit(ast.references);
+      visit(ast.variables);
+      visit(ast.directives);
+      visit(ast.providers);
+      visit(ast.children);
+    });
+  }
+
+  visitElement(ast: ElementAst, context: any): any {
+    return this.visitChildren(context, visit => {
+      visit(ast.attrs);
+      visit(ast.inputs);
+      visit(ast.outputs);
+      visit(ast.references);
+      visit(ast.directives);
+      visit(ast.providers);
+      visit(ast.children);
+    });
+  }
+
+  visitDirective(ast: DirectiveAst, context: any): any {
+    return this.visitChildren(context, visit => {
+      visit(ast.inputs);
+      visit(ast.hostProperties);
+      visit(ast.hostEvents);
+    });
+  }
+
+  // Terminal nodes
+  visitNgContent(ast: NgContentAst, context: any): any {}
+  visitReference(ast: ReferenceAst, context: any): any {}
+  visitVariable(ast: VariableAst, context: any): any {}
+  visitEvent(ast: BoundEventAst, context: any): any {}
+  visitElementProperty(ast: BoundElementPropertyAst, context: any): any {}
+  visitAttr(ast: AttrAst, context: any): any {}
+  visitBoundText(ast: BoundTextAst, context: any): any {}
+  visitText(ast: TextAst, context: any): any {}
+  visitDirectiveProperty(ast: BoundDirectivePropertyAst, context: any): any {}
+
+  private visitChildren<T extends TemplateAst>(
+      context: any,
+      cb: (visit: (<V extends TemplateAst>(children: V[]|undefined) => void)) => void) {
+    const visitor = this.visitor || this;
+    let results: any[][] = [];
+    function visit<T extends TemplateAst>(children: T[] | undefined) {
+      if (children) results.push(templateVisitAll(visitor, children, context));
+    }
+    cb(visit);
+    return [].concat.apply([], results);
+  }
 }

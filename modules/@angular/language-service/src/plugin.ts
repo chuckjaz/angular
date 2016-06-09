@@ -1,5 +1,7 @@
 import {DirectiveResolver, PipeResolver, TemplateAst, ViewResolver} from '@angular/compiler';
 import {MetadataCollector, StaticReflector, StaticReflectorHost} from '@angular/compiler-cli';
+import {NAMED_ENTITIES} from '@angular/compiler/src/html_tags';
+import {NgContentAst, TemplateAstChildVisitor, templateVisitAll} from '@angular/compiler/src/template_ast';
 import {Type} from '@angular/core';
 import * as ts from 'typescript';
 
@@ -16,6 +18,12 @@ interface AstResult {
   templateAst?: TemplateAst[];
   parseErrors?: ParseError[];
   errors?: {msg: string, node: ts.Node}[];
+}
+
+interface TemplateInfo {
+  sourceFile: ts.SourceFile;
+  templateNode: ts.Node;
+  templateAst: TemplateAst[];
 }
 
 export class LanguageServicePlugin {
@@ -69,6 +77,68 @@ export class LanguageServicePlugin {
     return result;
   }
 
+  /**
+   * Get completions for angular templates if one is at the given position.
+   */
+  getCompletionsAtPosition(fileName: string, position: number): ts.CompletionInfo {
+    let templateInfo = this.getTemplateAstAtPosition(fileName, position);
+    if (templateInfo) {
+      let {templateAst, templateNode} = templateInfo;
+      // The templateNode starts at the delimiter character so we add 1 to skip it.
+      let stringPosition = position - (templateNode.getStart() + 1);
+      let path = new TemplateAstPath(templateAst, stringPosition);
+      let mostSpecific = path.tail;
+      if (!path.empty) {
+        let astPosition = stringPosition - mostSpecific.sourceSpan.start.offset;
+        let result: ts.CompletionInfo = undefined;
+        let _this = this;
+        mostSpecific.visit(
+            {
+              visitNgContent(ast) {},
+              visitEmbeddedTemplate(ast) {},
+              visitElement(ast) {},
+              visitReference(ast) {},
+              visitEvent(ast) {},
+              visitElementProperty(ast) {},
+              visitAttr(ast) {},
+              visitBoundText(ast) {},
+              visitText(ast) {
+                result = _this.entityCompletions(getAstSourceText(templateInfo, ast), astPosition);
+              },
+              visitDirective(ast) {},
+              visitDirectiveProperty(ast) {},
+              visitVariable(ast) {}
+            },
+            null);
+        return result;
+      }
+    }
+    return undefined;
+  }
+
+  private entityCompletions(value: string, position: number): ts.CompletionInfo|undefined {
+    // Look for entity completions
+    const re = /&[A-Za-z]*;?(?!\d)/g;
+    let found: RegExpExecArray|null;
+    let result: ts.CompletionInfo = undefined;
+    while (found = re.exec(value)) {
+      let len = found[0].length;
+      if (position >= found.index && position < (found.index + len)) {
+        result = {
+          isMemberCompletion: false,
+          isNewIdentifierLocation: false,
+          entries:
+              Object.keys(NAMED_ENTITIES)
+                  .map(
+                      name => (
+                          {name: `&${name};`, kind: 'entity', kindModifiers: '', sortText: name}))
+        };
+        break;
+      }
+    }
+    return result;
+  }
+
   private get program(): ts.Program { return this.service.getProgram(); }
 
   private get reflectorHost(): ReflectorHost {
@@ -103,6 +173,37 @@ export class LanguageServicePlugin {
 
   private getSourceFile(fileName: string): ts.SourceFile {
     return this.program.getSourceFile(fileName);
+  }
+
+  private getTemplateNodeAtPosition(fileName: string, position: number):
+      {sourceFile: ts.SourceFile, node: TemplateNode}|undefined {
+    const sourceFile = this.getSourceFile(fileName);
+    if (sourceFile) {
+      const astNodes = this.getTemplateStrings(sourceFile);
+      for (const node of astNodes) {
+        if (node.templateString.pos <= position && node.templateString.end > position) {
+          return {sourceFile, node};
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private getTemplateAstAtPosition(fileName: string, position: number): TemplateInfo|undefined {
+    let nodeResult = this.getTemplateNodeAtPosition(fileName, position);
+    if (nodeResult) {
+      let {node, sourceFile} = nodeResult;
+      if (node) {
+        let astResult = this.getTemplateAst(sourceFile, node);
+        if (astResult) {
+          let {templateAst} = astResult;
+          if (templateAst) {
+            return {sourceFile, templateNode: node.templateString, templateAst};
+          }
+        }
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -239,4 +340,53 @@ export class LanguageServicePlugin {
         return (<ts.StringLiteral>node).text;
     }
   }
+}
+
+class TemplateAstPath {
+  private path: TemplateAst[];
+
+  constructor(ast: TemplateAst[], position: number, node?: ts.Node) {
+    let pos = node ? position - node.pos - 1 : position;
+    let visitor = new TemplateAstPathBuilder(pos);
+    templateVisitAll(visitor, ast);
+    this.path = visitor.getPath();
+  }
+
+  get empty(): boolean { return !this.path || !this.path.length; }
+
+  get head(): TemplateAst|undefined { return this.path[0]; }
+
+  get tail(): TemplateAst|undefined { return this.path[this.path.length - 1]; }
+
+  parentOf(node: TemplateAst): TemplateAst|undefined {
+    return this.path[this.path.indexOf(node) - 1];
+  }
+
+  childOf(node: TemplateAst): TemplateAst|undefined {
+    return this.path[this.path.indexOf(node) + 1];
+  }
+}
+
+class TemplateAstPathBuilder extends TemplateAstChildVisitor {
+  private path: TemplateAst[] = [];
+
+  constructor(private position: number) { super(); }
+
+  visit(ast: TemplateAst, context: any): any {
+    if (ast.sourceSpan.start.offset <= this.position && ast.sourceSpan.end.offset > this.position) {
+      this.path.push(ast);
+    } else {
+      // Returning a value here will result in the children being skipped.
+      return true;
+    }
+  }
+
+  getPath(): TemplateAst[] { return this.path; }
+}
+
+function getAstSourceText(info: TemplateInfo, node: TemplateAst): string {
+  let stringStart = info.templateNode.getStart() + 1;
+  let start = node.sourceSpan.start.offset;
+  let end = node.sourceSpan.end.offset;
+  return info.sourceFile.text.substring(stringStart + start, stringStart + end);
 }

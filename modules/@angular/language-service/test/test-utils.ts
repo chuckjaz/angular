@@ -39,21 +39,8 @@ export type MockDirectory = {
   getScriptVersion(fileName: string): string { return '1'; }
 
   getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
-    let content: string|undefined;
-    const names = fileName.split(path.sep);
-    let basename = path.basename(fileName);
-    if (/^lib.*\.d\.ts$/.test(basename)) {
-      let libPath = ts.getDefaultLibFilePath(this.getCompilationSettings());
-      content = fs.readFileSync(path.join(path.dirname(libPath), basename), 'utf8');
-    } else {
-      let effectiveName = this.getEffectiveName(fileName);
-      if (effectiveName === fileName)
-        content = open(fileName, this.data);
-      else if (fs.existsSync(effectiveName)) {
-        content = fs.readFileSync(effectiveName, 'utf8');
-      }
-    }
-    if (content) return ts.ScriptSnapshot.fromString(content);
+    let content = this.getFileContent(fileName);
+    if (content) return ts.ScriptSnapshot.fromString(removeLocationMarkers(content));
     return undefined;
   }
 
@@ -67,6 +54,30 @@ export type MockDirectory = {
       return directoryExists(directoryName, this.data);
     else
       return fs.existsSync(effectiveName);
+  }
+
+  getMarkerLocations(fileName: string): {[name: string]: number}|undefined {
+    let content = this.getFileContent(fileName);
+    if (content) {
+      return getLocationMarkers(content);
+    }
+    return undefined;
+  }
+
+  private getFileContent(fileName: string): string {
+    let basename = path.basename(fileName);
+    if (/^lib.*\.d\.ts$/.test(basename)) {
+      let libPath = ts.getDefaultLibFilePath(this.getCompilationSettings());
+      return fs.readFileSync(path.join(path.dirname(libPath), basename), 'utf8');
+    } else {
+      let effectiveName = this.getEffectiveName(fileName);
+      if (effectiveName === fileName)
+        return open(fileName, this.data);
+      else if (fs.existsSync(effectiveName)) {
+        return fs.readFileSync(effectiveName, 'utf8');
+      }
+    }
+    return undefined;
   }
 
   private getEffectiveName(name: string): string {
@@ -111,4 +122,21 @@ function open(fileName: string, data: MockData): string|undefined {
 function directoryExists(dirname: string, data: MockData): boolean {
   let result = find(dirname, data);
   return result && typeof result !== 'string';
+}
+
+const locationMarker = /\~\{(\w+(-\w+)*)\}/g;
+
+function removeLocationMarkers(value: string): string {
+  return value.replace(locationMarker, '');
+}
+
+function getLocationMarkers(value: string): {[name: string]: number} {
+  let result: {[name: string]: number} = {};
+  let adjustment = 0;
+  value.replace(locationMarker, (match: string, name: string, _: any, index: number): string => {
+    result[name] = index - adjustment;
+    adjustment += match.length;
+    return '';
+  });
+  return result;
 }
