@@ -1,9 +1,8 @@
-import {StaticReflectorHost, StaticSymbol, MetadataCollector, ModuleMetadata} from '@angular/compiler-cli';
-
-import {AssetUrl} from './compiler-private';
-
+import {MetadataCollector, ModuleMetadata, StaticReflectorHost, StaticSymbol} from '@angular/compiler-cli';
 import * as path from 'path';
 import * as ts from 'typescript';
+
+import {AssetUrl} from './compiler-private';
 
 const EXT = /(\.ts|\.d\.ts|\.js|\.jsx|\.tsx)$/;
 const DTS = /\.d\.ts$/;
@@ -29,9 +28,7 @@ class ReflectorModuleModuleResolutionHost implements ts.ModuleResolutionHost {
 
   directoryExists: (directoryName: string) => boolean;
 
-  forceExist(fileName: string): void {
-    this.forceExists.push(fileName);
-  }
+  forceExist(fileName: string): void { this.forceExists.push(fileName); }
 }
 
 export class ReflectorHost implements StaticReflectorHost {
@@ -39,8 +36,9 @@ export class ReflectorHost implements StaticReflectorHost {
   private moduleResolverHost: ReflectorModuleModuleResolutionHost;
   private _typeChecker: ts.TypeChecker;
 
-  constructor(private program: ts.Program, private serviceHost: ts.LanguageServiceHost,
-              private options: ts.CompilerOptions, private basePath: string) {
+  constructor(
+      private program: ts.Program, private serviceHost: ts.LanguageServiceHost,
+      private options: ts.CompilerOptions, private basePath: string) {
     this.moduleResolverHost = new ReflectorModuleModuleResolutionHost(serviceHost);
   }
 
@@ -55,8 +53,8 @@ export class ReflectorHost implements StaticReflectorHost {
   }
 
   private resolve(m: string, containingFile: string) {
-    const resolved =
-        ts.resolveModuleName(m, containingFile, this.options, this.moduleResolverHost).resolvedModule;
+    const resolved = ts.resolveModuleName(m, containingFile, this.options, this.moduleResolverHost)
+                         .resolvedModule;
     return resolved ? resolved.resolvedFileName : null;
   };
 
@@ -112,11 +110,12 @@ export class ReflectorHost implements StaticReflectorHost {
     return result;
   }
 
-  findDeclaration(module: string, symbolName: string, containingFile: string,
-                  containingModule?: string): StaticSymbol {
+  findDeclaration(
+      module: string, symbolName: string, containingFile: string,
+      containingModule?: string): StaticSymbol {
     if (!containingFile || !containingFile.length) {
-      if (module.indexOf(".") === 0) {
-        throw new Error("Resolution of relative paths requires a containing file.");
+      if (module.indexOf('.') === 0) {
+        throw new Error('Resolution of relative paths requires a containing file.');
       }
 
       // Any containing file gives the same result for absolute imports

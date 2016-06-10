@@ -1,22 +1,9 @@
+import {DirectiveResolver, PipeResolver, TemplateAst, ViewResolver} from '@angular/compiler';
+import {MetadataCollector, StaticReflector, StaticReflectorHost} from '@angular/compiler-cli';
 import {Type} from '@angular/core';
-import {TemplateAst, DirectiveResolver, ViewResolver, PipeResolver} from '@angular/compiler';
-import {StaticReflector, StaticReflectorHost, MetadataCollector} from '@angular/compiler-cli';
-
-import {
-  CompileMetadataResolver,
-  DomElementSchemaRegistry,
-  HtmlParser,
-  Lexer,
-  Parser,
-  ParseError,
-  ParseSourceSpan,
-  ParseLocation,
-  TemplateParser,
-  TemplateParseResult
-} from './compiler-private';
-
 import * as ts from 'typescript';
 
+import {CompileMetadataResolver, DomElementSchemaRegistry, HtmlParser, Lexer, ParseError, ParseLocation, ParseSourceSpan, Parser, TemplateParseResult, TemplateParser} from './compiler-private';
 import {ReflectorHost} from './reflector-host';
 
 interface TemplateNode {
@@ -28,7 +15,7 @@ interface TemplateNode {
 interface AstResult {
   templateAst?: TemplateAst[];
   parseErrors?: ParseError[];
-  errors?: { msg: string, node: ts.Node}[];
+  errors?: {msg: string, node: ts.Node}[];
 }
 
 export class LanguageServicePlugin {
@@ -38,9 +25,7 @@ export class LanguageServicePlugin {
   private _reflector: StaticReflector;
   private _refletorHost: ReflectorHost;
 
-  constructor(
-    private host: ts.LanguageServiceHost,
-    private service: ts.LanguageService) {}
+  constructor(private host: ts.LanguageServiceHost, private service: ts.LanguageService) {}
 
   /**
    * Augment the diagnostics reported by TypeScript with errors from the templates in string
@@ -84,19 +69,14 @@ export class LanguageServicePlugin {
     return result;
   }
 
-  private get program(): ts.Program {
-    return this.service.getProgram();
-  }
+  private get program(): ts.Program { return this.service.getProgram(); }
 
   private get reflectorHost(): ReflectorHost {
     let result = this._refletorHost;
     if (!result) {
       result = this._refletorHost = new ReflectorHost(
-        this.program,
-        this.host,
-        this.host.getCompilationSettings(),
-        this.host.getCurrentDirectory()
-      );
+          this.program, this.host, this.host.getCompilationSettings(),
+          this.host.getCurrentDirectory());
     }
     return result;
   }
@@ -109,17 +89,14 @@ export class LanguageServicePlugin {
     return result;
   }
 
- private get metadataResolver(): CompileMetadataResolver {
+  private get metadataResolver(): CompileMetadataResolver {
     let result = this._metadataResolver;
     if (!result) {
       const directiveResolver = new DirectiveResolver(this.reflector);
       const pipeResolver = new PipeResolver(this.reflector);
       const viewResolver = new ViewResolver(this.reflector);
       result = this._metadataResolver = new CompileMetadataResolver(
-        directiveResolver,
-        pipeResolver,
-        viewResolver,
-        [], [], this.reflector);
+          directiveResolver, pipeResolver, viewResolver, [], [], this.reflector);
     }
     return result;
   }
@@ -131,11 +108,11 @@ export class LanguageServicePlugin {
   /**
    * Retrieve the nodes that contain templates for the current file.
    */
-  private getTemplateStrings(sourceFile: ts.SourceFile) : TemplateNode[] {
+  private getTemplateStrings(sourceFile: ts.SourceFile): TemplateNode[] {
     let result = this.nodesCache.get(sourceFile);
     let version: string = this.host.getScriptVersion(sourceFile.fileName);
     if (!result || result.version != version) {
-      result = { templates: [], version };
+      result = {templates: [], version};
 
       // Find each template string in the file
       let visit = (child: ts.Node) => {
@@ -144,7 +121,7 @@ export class LanguageServicePlugin {
           case ts.SyntaxKind.StringLiteral:
             let [declaration, decorator] = this.getTemplateClassDecl(child);
             if (declaration) {
-              result.templates.push({templateString: child, declaration, decorator });
+              result.templates.push({templateString: child, declaration, decorator});
             }
             break;
           default:
@@ -174,27 +151,27 @@ export class LanguageServicePlugin {
       return missing;
     } else {
       // TODO: Is this different for a literal, i.e. a quoted property name like "template"?
-      if((parentNode as any).name.text !== 'template'){
+      if ((parentNode as any).name.text !== 'template') {
         return missing;
       }
     }
-    parentNode = parentNode.parent; // ObjectLiteralExpression
+    parentNode = parentNode.parent;  // ObjectLiteralExpression
     if (!parentNode || parentNode.kind !== ts.SyntaxKind.ObjectLiteralExpression) {
       return missing;
     }
 
-    parentNode = parentNode.parent; // CallExpression
+    parentNode = parentNode.parent;  // CallExpression
     if (!parentNode || parentNode.kind !== ts.SyntaxKind.CallExpression) {
       return missing;
     }
     const callTarget = (<ts.CallExpression>parentNode).expression;
 
-    let decorator = parentNode.parent; // Decorator
+    let decorator = parentNode.parent;  // Decorator
     if (!decorator || decorator.kind !== ts.SyntaxKind.Decorator) {
       return missing;
     }
 
-    let declaration = <ts.ClassDeclaration>decorator.parent; // ClassDeclaration
+    let declaration = <ts.ClassDeclaration>decorator.parent;  // ClassDeclaration
     if (!declaration || declaration.kind !== ts.SyntaxKind.ClassDeclaration) {
       return missing;
     }
@@ -212,20 +189,20 @@ export class LanguageServicePlugin {
       result = sourceAstCache.get(node);
     }
     if (!result) {
-      let parser = new TemplateParser(new Parser(new Lexer()),
-         new DomElementSchemaRegistry(), new HtmlParser(), null, []);
-      const type = this.reflectorHost.getStaticSymbol(sourceFile.fileName, node.declaration.name.text);
+      let parser = new TemplateParser(
+          new Parser(new Lexer()), new DomElementSchemaRegistry(), new HtmlParser(), null, []);
+      const type =
+          this.reflectorHost.getStaticSymbol(sourceFile.fileName, node.declaration.name.text);
       let directive = this.metadataResolver.maybeGetDirectiveMetadata(<any>type);
       if (directive) {
         try {
           let parseResult = parser.tryParse(
-            directive,
-            this.stringOf(node.templateString),
-            this.metadataResolver.getViewDirectivesMetadata(type as any as Type),
-            this.metadataResolver.getViewPipesMetadata(type as any as Type), '');
-          result = { templateAst: parseResult.templateAst, parseErrors: parseResult.errors };
+              directive, this.stringOf(node.templateString),
+              this.metadataResolver.getViewDirectivesMetadata(type as any as Type),
+              this.metadataResolver.getViewPipesMetadata(type as any as Type), '');
+          result = {templateAst: parseResult.templateAst, parseErrors: parseResult.errors};
         } catch (e) {
-          result = { errors: [{ msg: e.stack, node: node.decorator }]};
+          result = {errors: [{msg: e.stack, node: node.decorator}]};
         }
         if (!sourceAstCache) {
           sourceAstCache = new Map<TemplateNode, AstResult>();
@@ -244,8 +221,8 @@ export class LanguageServicePlugin {
       this.nodesCache.delete(sourceFile);
       this.astCache.delete(sourceFile);
     } else {
-      let r: { value?: ts.SourceFile; done?: boolean };
-      for (var i = this.nodesCache.keys(); r = i.next(), !r.done; ) {
+      let r: {value?: ts.SourceFile; done?: boolean};
+      for (var i = this.nodesCache.keys(); r = i.next(), !r.done;) {
         const key = r.value;
         if (key) {
           this.invalidateCaches(key);

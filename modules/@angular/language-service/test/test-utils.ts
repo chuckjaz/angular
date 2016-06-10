@@ -8,16 +8,12 @@ export type MockDirectory = {
   [name: string]: MockData | undefined;
 }
 
-export class MockTypescriptHost implements ts.LanguageServiceHost {
+                            export class MockTypescriptHost implements ts.LanguageServiceHost {
   private angularPath: string;
   private nodeModulesPath: string;
-  constructor(
-    private scriptNames: string[],
-    private data: MockData
-  ) {
+  constructor(private scriptNames: string[], private data: MockData) {
     let angularIndex = module.filename.indexOf('@angular');
-    if (angularIndex >= 0)
-      this.angularPath = module.filename.substr(0, angularIndex);
+    if (angularIndex >= 0) this.angularPath = module.filename.substr(0, angularIndex);
     let distIndex = module.filename.indexOf('/dist/all');
     if (distIndex >= 0)
       this.nodeModulesPath = path.join(module.filename.substr(0, distIndex), 'node_modules');
@@ -32,24 +28,18 @@ export class MockTypescriptHost implements ts.LanguageServiceHost {
       experimentalDecorators: true,
       removeComments: false,
       noImplicitAny: false,
-      lib: ["lib.es2015.d.ts", "lib.dom.d.ts"],
+      lib: ['lib.es2015.d.ts', 'lib.dom.d.ts'],
     };
   }
 
-  getProjectVersion(): string {
-    return "0";
-  }
+  getProjectVersion(): string { return '0'; }
 
-  getScriptFileNames(): string[] {
-    return this.scriptNames;
-  }
+  getScriptFileNames(): string[] { return this.scriptNames; }
 
-  getScriptVersion(fileName: string): string {
-    return "1";
-  }
+  getScriptVersion(fileName: string): string { return '1'; }
 
   getScriptSnapshot(fileName: string): ts.IScriptSnapshot {
-    let content: string | undefined;
+    let content: string|undefined;
     const names = fileName.split(path.sep);
     let basename = path.basename(fileName);
     if (/^lib.*\.d\.ts$/.test(basename)) {
@@ -63,18 +53,13 @@ export class MockTypescriptHost implements ts.LanguageServiceHost {
         content = fs.readFileSync(effectiveName, 'utf8');
       }
     }
-    if (content)
-      return ts.ScriptSnapshot.fromString(content);
+    if (content) return ts.ScriptSnapshot.fromString(content);
     return undefined;
   }
 
-  getCurrentDirectory(): string {
-    return '/';
-  }
+  getCurrentDirectory(): string { return '/'; }
 
-  getDefaultLibFileName(options: ts.CompilerOptions): string {
-    return 'lib.d.ts';
-  }
+  getDefaultLibFileName(options: ts.CompilerOptions): string { return 'lib.d.ts'; }
 
   directoryExists(directoryName: string): boolean {
     let effectiveName = this.getEffectiveName(directoryName);
@@ -101,24 +86,23 @@ export class MockTypescriptHost implements ts.LanguageServiceHost {
   }
 }
 
-function find(fileName: string, data: MockData): MockData | undefined {
+function find(fileName: string, data: MockData): MockData|undefined {
   let names = fileName.split('/');
   if (names.length && !names[0].length) names.shift();
   let current = data;
   for (let name of names) {
-    if (typeof current === "string")
+    if (typeof current === 'string')
       return undefined;
     else
       current = (<MockDirectory>current)[name];
-    if (!current)
-      return undefined;
+    if (!current) return undefined;
   }
   return current;
 }
 
-function open(fileName: string, data: MockData): string | undefined {
+function open(fileName: string, data: MockData): string|undefined {
   let result = find(fileName, data);
-  if (typeof result === "string") {
+  if (typeof result === 'string') {
     return result;
   }
   return undefined;
@@ -126,5 +110,5 @@ function open(fileName: string, data: MockData): string | undefined {
 
 function directoryExists(dirname: string, data: MockData): boolean {
   let result = find(dirname, data);
-  return result && typeof result !== "string";
+  return result && typeof result !== 'string';
 }

@@ -53,6 +53,3 @@ export var ViewCompiler: typeof _c.ViewCompiler = _c.ViewCompiler;
 
 export type TypeScriptEmitter = _c.TypeScriptEmitter;
 export var TypeScriptEmitter: typeof _c.TypeScriptEmitter = _c.TypeScriptEmitter;
-
-
-
