@@ -100,7 +100,7 @@ export class TemplateParser {
       pipes: CompilePipeMetadata[], templateUrl: string): TemplateParseResult {
     var htmlAstWithErrors = this._htmlParser.parse(template, templateUrl);
     var errors: ParseError[] = htmlAstWithErrors.errors;
-    var result: any /** TODO #???? */;
+    var result: TemplateAst[];
     if (htmlAstWithErrors.rootNodes.length > 0) {
       var uniqDirectives = <CompileDirectiveMetadata[]>removeDuplicates(directives);
       var uniqPipes = <CompilePipeMetadata[]>removeDuplicates(pipes);

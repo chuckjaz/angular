@@ -35,6 +35,14 @@ describe('plugin', () => {
   it('should be able to get entity completions',
      () => { contains('app/app.component.ts', 'entity-amp', '&amp;', '&gt;', '&lt;', '&iota;'); });
 
+  it('should be able to return html elements', () => {
+    let htmlTags = ['<h1>', '<h2>', '<div>', '<span>'];
+    let locations = ['empty', 'start-tag', 'start-tag-after-h', 'start-tag-h1', 'h1-content'];
+    for (let location of locations) {
+      contains('app/app.component.ts', location, ...htmlTags);
+    }
+  });
+
   function contains(fileName: string, locationMarker: string, ...names: string[]) {
     let location = mockHost.getMarkerLocations(fileName)[locationMarker];
     expectEntries(plugin.getCompletionsAtPosition(fileName, location), ...names);
@@ -44,13 +52,16 @@ describe('plugin', () => {
 
 function expectEntries(info: ts.CompletionInfo, ...names: string[]) {
   let entries: {[name: string]: boolean} = {};
-  for (let entry of info.entries) {
-    entries[entry.name] = true;
-  }
-  let missing = names.filter(name => !entries[name]);
-  if (missing.length) {
-    throw new Error(
-        `Expected at least on of the following, ${missing.join(', ')}, in the list of entries ${info.entries.map(entry => entry.name).join(', ')}`);
+  expect(info).toBeDefined();
+  if (info) {
+    for (let entry of info.entries) {
+      entries[entry.name] = true;
+    }
+    let missing = names.filter(name => !entries[name]);
+    if (missing.length) {
+      throw new Error(
+          `Expected at least on of the following, ${missing.join(', ')}, in the list of entries ${info.entries.map(entry => entry.name).join(', ')}`);
+    }
   }
 }
 

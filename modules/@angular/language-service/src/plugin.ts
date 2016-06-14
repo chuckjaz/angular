@@ -1,4 +1,4 @@
-import {DirectiveResolver, PipeResolver, TemplateAst, ViewResolver} from '@angular/compiler';
+import {CompileDirectiveMetadata, DirectiveResolver, PipeResolver, TemplateAst, ViewResolver} from '@angular/compiler';
 import {MetadataCollector, StaticReflector, StaticReflectorHost} from '@angular/compiler-cli';
 import {NAMED_ENTITIES} from '@angular/compiler/src/html_tags';
 import {NgContentAst, TemplateAstChildVisitor, templateVisitAll} from '@angular/compiler/src/template_ast';
@@ -17,6 +17,7 @@ interface TemplateNode {
 interface AstResult {
   templateAst?: TemplateAst[];
   parseErrors?: ParseError[];
+  directive?: CompileDirectiveMetadata;
   errors?: {msg: string, node: ts.Node}[];
 }
 
