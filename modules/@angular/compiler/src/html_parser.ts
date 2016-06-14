@@ -318,12 +318,15 @@ class TreeBuilder {
     var fullName = mergeNsAndName(attrName.parts[0], attrName.parts[1]);
     var end = attrName.sourceSpan.end;
     var value = '';
+    var valueSpan: ParseSourceSpan;
     if (this.peek.type === HtmlTokenType.ATTR_VALUE) {
       var valueToken = this._advance();
       value = valueToken.parts[0];
       end = valueToken.sourceSpan.end;
+      valueSpan = valueToken.sourceSpan;
     }
-    return new HtmlAttrAst(fullName, value, new ParseSourceSpan(attrName.sourceSpan.start, end));
+    return new HtmlAttrAst(
+        fullName, value, new ParseSourceSpan(attrName.sourceSpan.start, end), valueSpan);
   }
 
   private _getParentElement(): HtmlElementAst {

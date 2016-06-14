@@ -14,9 +14,9 @@ import { HeroService }         from './hero.service';
   selector: 'my-app',
 
   template: \`~{empty}
-    <~{start-tag}h~{start-tag-after-h}1~{start-tag-h1}>~{h1-content}{{title}}</~{end-tag-h1}h1>
+    <~{start-tag}h~{start-tag-after-h}1~{start-tag-h1} ~{h1-after-space}>~{h1-content}{{title}}</~{end-tag-h1}h1>
     ~{after-h1}<nav>
-      <a [routerLink]="['Dashboard']">Dashboard</a>
+      <a [rout~{a-attr-name}erLink]="~{a-attr-value}['Dashboard']">Dashboard</a>
       <a [routerLink]="['Heroes']">Heroes</a>
     </nav>
     &~{entity-amp}amp;

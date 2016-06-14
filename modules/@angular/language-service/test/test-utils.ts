@@ -8,7 +8,29 @@ export type MockDirectory = {
   [name: string]: MockData | undefined;
 }
 
-                            export class MockTypescriptHost implements ts.LanguageServiceHost {
+const angularts = /@angular\/(\w|\/|-)+\.tsx?$/;
+const rxjsts = /rxjs\/(\w|\/)+\.tsx?$/;
+
+/* The missing cache does two things. First it improves performance of the
+   tests as it reduces the number of OS calls made during testing. Also it
+   improves debugging experience as fewer exceptions are raised allow you
+   to use stopping on all exceptions. */
+const missingCache = new Map<string, boolean>();
+missingCache.set('/node_modules/@angular/core.d.ts', true);
+missingCache.set('/node_modules/@angular/core/package.json', true);
+missingCache.set('/node_modules/@angular/http.d.ts', true);
+missingCache.set('/node_modules/@angular/http/package.json', true);
+missingCache.set('/node_modules/@angular/platform-browser.d.ts', true);
+missingCache.set('/node_modules/@angular/platform-browser/package.json', true);
+missingCache.set('/node_modules/@angular/common.d.ts', true);
+missingCache.set('/node_modules/@angular/common/package.json', true);
+missingCache.set('/node_modules/@angular/router-deprecated.d.ts', true);
+missingCache.set('/node_modules/@angular/router-deprecated/package.json', true);
+missingCache.set(
+    '/node_modules/@angular/common/src/location/platform_location.metadata.json', true);
+missingCache.set('/node_modules/@angular/core/src/linker/view_container_ref.metadata.json', true);
+
+export class MockTypescriptHost implements ts.LanguageServiceHost {
   private angularPath: string;
   private nodeModulesPath: string;
   constructor(private scriptNames: string[], private data: MockData) {
@@ -70,11 +92,19 @@ export type MockDirectory = {
       let libPath = ts.getDefaultLibFilePath(this.getCompilationSettings());
       return fs.readFileSync(path.join(path.dirname(libPath), basename), 'utf8');
     } else {
+      if (missingCache.has(fileName)) {
+        return undefined;
+      }
       let effectiveName = this.getEffectiveName(fileName);
       if (effectiveName === fileName)
         return open(fileName, this.data);
-      else if (fs.existsSync(effectiveName)) {
-        return fs.readFileSync(effectiveName, 'utf8');
+      else if (!fileName.match(angularts) && !fileName.match(rxjsts)) {
+        if (fs.existsSync(effectiveName)) {
+          return fs.readFileSync(effectiveName, 'utf8');
+        } else {
+          missingCache.set(fileName, true);
+          console.log(`MISSING: ${fileName} missing`);
+        }
       }
     }
     return undefined;
@@ -83,11 +113,12 @@ export type MockDirectory = {
   private getEffectiveName(name: string): string {
     const node_modules = 'node_modules';
     if (name.startsWith('/' + node_modules)) {
-      if (this.nodeModulesPath) {
+      if (this.nodeModulesPath && !name.startsWith('/' + node_modules + '/@angular')) {
         let result = path.join(this.nodeModulesPath, name.substr(node_modules.length + 1));
-        if (fs.existsSync(result)) {
-          return result;
-        }
+        if (!name.match(rxjsts))
+          if (fs.existsSync(result)) {
+            return result;
+          }
       }
       if (this.angularPath) {
         return path.join(this.angularPath, name.substr(node_modules.length + 1));

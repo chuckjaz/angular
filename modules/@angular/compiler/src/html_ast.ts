@@ -32,7 +32,9 @@ export class HtmlExpansionCaseAst implements HtmlAst {
 }
 
 export class HtmlAttrAst implements HtmlAst {
-  constructor(public name: string, public value: string, public sourceSpan: ParseSourceSpan) {}
+  constructor(
+      public name: string, public value: string, public sourceSpan: ParseSourceSpan,
+      public valueSpan?: ParseSourceSpan) {}
   visit(visitor: HtmlAstVisitor, context: any): any { return visitor.visitAttr(this, context); }
 }
 
@@ -50,6 +52,7 @@ export class HtmlCommentAst implements HtmlAst {
 }
 
 export interface HtmlAstVisitor {
+  visit?(ast: HtmlAst, context: any): any;
   visitElement(ast: HtmlElementAst, context: any): any;
   visitAttr(ast: HtmlAttrAst, context: any): any;
   visitText(ast: HtmlTextAst, context: any): any;
@@ -61,10 +64,47 @@ export interface HtmlAstVisitor {
 export function htmlVisitAll(visitor: HtmlAstVisitor, asts: HtmlAst[], context: any = null): any[] {
   var result: any[] = [];
   asts.forEach(ast => {
-    var astResult = ast.visit(visitor, context);
+    var astResult = (visitor.visit && visitor.visit(ast, context)) || ast.visit(visitor, context);
     if (isPresent(astResult)) {
       result.push(astResult);
     }
   });
   return result;
+}
+
+export function htmlVisitEachChild(
+    visitor: HtmlAstVisitor, ast: HtmlAst, context: any = null): any[] {
+  return ast.visit(new HtmlChildVisitor(visitor), context)
+}
+
+export class HtmlChildVisitor implements HtmlAstVisitor {
+  constructor(private visitor?: HtmlAstVisitor) {}
+
+  visitElement(ast: HtmlElementAst, context: any): any {
+    this.visitChildren(context, visit => {
+      visit(ast.attrs);
+      visit(ast.children);
+    });
+  }
+
+  visitAttr(ast: HtmlAttrAst, context: any): any {}
+  visitText(ast: HtmlTextAst, context: any): any {}
+  visitComment(ast: HtmlCommentAst, context: any): any {}
+
+  visitExpansion(ast: HtmlExpansionAst, context: any): any {
+    this.visitChildren(context, visit => { visit(ast.cases); });
+  }
+
+  visitExpansionCase(ast: HtmlExpansionCaseAst, context: any): any {}
+
+  private visitChildren<T extends HtmlAst>(
+      context: any, cb: (visit: (<V extends HtmlAst>(children: V[]|undefined) => void)) => void) {
+    const visitor = this.visitor || this;
+    let results: any[][] = [];
+    function visit<T extends HtmlAst>(children: T[] | undefined) {
+      if (children) results.push(htmlVisitAll(visitor, children, context));
+    }
+    cb(visit);
+    return [].concat.apply([], results);
+  }
 }

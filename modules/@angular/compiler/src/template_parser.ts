@@ -8,7 +8,7 @@ import {BaseException} from '../src/facade/exceptions';
 import {AST, Interpolation, ASTWithSource, TemplateBinding, RecursiveAstVisitor, BindingPipe} from './expression_parser/ast';
 import {Parser} from './expression_parser/parser';
 import {CompileDirectiveMetadata, CompilePipeMetadata, CompileMetadataWithType,} from './compile_metadata';
-import {HtmlParser} from './html_parser';
+import {HtmlParser, HtmlParseTreeResult} from './html_parser';
 import {splitNsName, mergeNsAndName} from './html_tags';
 import {ParseSourceSpan, ParseError, ParseLocation, ParseErrorLevel} from './parse_util';
 
@@ -82,7 +82,9 @@ export class TemplateParser {
   parse(
       component: CompileDirectiveMetadata, template: string, directives: CompileDirectiveMetadata[],
       pipes: CompilePipeMetadata[], templateUrl: string): TemplateAst[] {
-    var result = this.tryParse(component, template, directives, pipes, templateUrl);
+    var result = this.tryParseHtml(
+        this._htmlParser.parse(template, templateUrl), component, template, directives, pipes,
+        templateUrl);
     var warnings = result.errors.filter(error => error.level === ParseErrorLevel.WARNING);
     var errors = result.errors.filter(error => error.level === ParseErrorLevel.FATAL);
     if (warnings.length > 0) {
@@ -95,12 +97,21 @@ export class TemplateParser {
     return result.templateAst;
   }
 
+  /** @deprecated */
   tryParse(
       component: CompileDirectiveMetadata, template: string, directives: CompileDirectiveMetadata[],
       pipes: CompilePipeMetadata[], templateUrl: string): TemplateParseResult {
-    var htmlAstWithErrors = this._htmlParser.parse(template, templateUrl);
-    var errors: ParseError[] = htmlAstWithErrors.errors;
-    var result: any /** TODO #???? */;
+    return this.tryParseHtml(
+        this._htmlParser.parse(template, templateUrl), component, template, directives, pipes,
+        templateUrl);
+  }
+
+  tryParseHtml(
+      htmlAstWithErrors: HtmlParseTreeResult, component: CompileDirectiveMetadata, template: string,
+      directives: CompileDirectiveMetadata[], pipes: CompilePipeMetadata[],
+      templateUrl: string): TemplateParseResult {
+    var result: TemplateAst[];
+    var errors = htmlAstWithErrors.errors;
     if (htmlAstWithErrors.rootNodes.length > 0) {
       var uniqDirectives = <CompileDirectiveMetadata[]>removeDuplicates(directives);
       var uniqPipes = <CompilePipeMetadata[]>removeDuplicates(pipes);
@@ -114,7 +125,6 @@ export class TemplateParser {
     } else {
       result = [];
     }
-
     this._assertNoReferenceDuplicationOnTemplate(result, errors);
 
     if (errors.length > 0) {
@@ -365,7 +375,7 @@ class TemplateParseVisitor implements HtmlAstVisitor {
           nodeName, attrs, elementProps, events, references,
           providerContext.transformedDirectiveAsts, providerContext.transformProviders,
           providerContext.transformedHasViewContainer, children,
-          hasInlineTemplates ? null : ngContentIndex, element.sourceSpan);
+          hasInlineTemplates ? null : ngContentIndex, element.sourceSpan, element.endSourceSpan);
     }
     if (hasInlineTemplates) {
       var templateCssSelector = createElementCssSelector(TEMPLATE_ELEMENT, templateMatchableAttrs);
@@ -835,7 +845,7 @@ class NonBindableVisitor implements HtmlAstVisitor {
     var children = htmlVisitAll(this, ast.children, EMPTY_ELEMENT_CONTEXT);
     return new ElementAst(
         ast.name, htmlVisitAll(this, ast.attrs), [], [], [], [], [], false, children,
-        ngContentIndex, ast.sourceSpan);
+        ngContentIndex, ast.sourceSpan, ast.endSourceSpan);
   }
   visitComment(ast: HtmlCommentAst, context: any): any { return null; }
   visitAttr(ast: HtmlAttrAst, context: any): AttrAst {

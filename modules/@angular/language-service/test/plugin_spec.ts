@@ -35,22 +35,41 @@ describe('plugin', () => {
   it('should be able to get entity completions',
      () => { contains('app/app.component.ts', 'entity-amp', '&amp;', '&gt;', '&lt;', '&iota;'); });
 
+  it('should be able to return html elements', () => {
+    let htmlTags = ['<h1>', '<h2>', '<div>', '<span>'];
+    let locations = ['h1-content', 'empty', 'start-tag', 'start-tag-after-h', 'start-tag-h1'];
+    for (let location of locations) {
+      contains('app/app.component.ts', location, ...htmlTags);
+    }
+  });
+
+  it('should be able to return h1 attributes',
+     () => { contains('app/app.component.ts', 'h1-after-space', 'id', 'dir', 'lang', 'onclick'); });
+
+  it('should be able to return a attributes (in the name span)',
+     () => { contains('app/app.component.ts', 'a-attr-name', 'id', 'dir', 'lang'); });
+
   function contains(fileName: string, locationMarker: string, ...names: string[]) {
     let location = mockHost.getMarkerLocations(fileName)[locationMarker];
-    expectEntries(plugin.getCompletionsAtPosition(fileName, location), ...names);
+    expectEntries(locationMarker, plugin.getCompletionsAtPosition(fileName, location), ...names);
   }
 });
 
 
-function expectEntries(info: ts.CompletionInfo, ...names: string[]) {
+function expectEntries(locationMarker: string, info: ts.CompletionInfo, ...names: string[]) {
   let entries: {[name: string]: boolean} = {};
-  for (let entry of info.entries) {
-    entries[entry.name] = true;
-  }
-  let missing = names.filter(name => !entries[name]);
-  if (missing.length) {
+  if (!info) {
     throw new Error(
-        `Expected at least on of the following, ${missing.join(', ')}, in the list of entries ${info.entries.map(entry => entry.name).join(', ')}`);
+        `Expected result from ${locationMarker} to include ${names.join(', ')} but no result provided`);
+  } else {
+    for (let entry of info.entries) {
+      entries[entry.name] = true;
+    }
+    let missing = names.filter(name => !entries[name]);
+    if (missing.length) {
+      throw new Error(
+          `Expected result from ${locationMarker} to include at least one of the following, ${missing.join(', ')}, in the list of entries ${info.entries.map(entry => entry.name).join(', ')}`);
+    }
   }
 }
 

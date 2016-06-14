@@ -1557,7 +1557,8 @@ class FooAstTransformer implements TemplateAstVisitor {
   visitElement(ast: ElementAst, context: any): any {
     if (ast.name != 'div') return ast;
     return new ElementAst(
-        'foo', [], [], [], [], [], [], false, [], ast.ngContentIndex, ast.sourceSpan);
+        'foo', [], [], [], [], [], [], false, [], ast.ngContentIndex, ast.sourceSpan,
+        ast.endSourceSpan);
   }
   visitReference(ast: ReferenceAst, context: any): any { throw 'not implemented'; }
   visitVariable(ast: VariableAst, context: any): any { throw 'not implemented'; }
@@ -1575,8 +1576,10 @@ class FooAstTransformer implements TemplateAstVisitor {
 class BarAstTransformer extends FooAstTransformer {
   visitElement(ast: ElementAst, context: any): any {
     if (ast.name != 'foo') return ast;
+    15
     return new ElementAst(
-        'bar', [], [], [], [], [], [], false, [], ast.ngContentIndex, ast.sourceSpan);
+        'bar', [], [], [], [], [], [], false, [], ast.ngContentIndex, ast.sourceSpan,
+        ast.endSourceSpan);
   }
 }
 
