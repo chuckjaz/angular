@@ -165,7 +165,7 @@ class LanguageServiceImpl implements LanguageService {
   private elementCompletions(info: TemplateInfo, path: HtmlAstPath): Completions {
     // Return all HTML elements.
     return elementNames().map<Completion>(
-        name => ({kind: 'element', name: `<${name}>`, sort: name}));
+        name => ({kind: 'element', name: `<${name}`, sort: name}));
   }
 
   private attributeCompletions(templateInfo: TemplateInfo, path: HtmlAstPath): Completions {

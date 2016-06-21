@@ -36,7 +36,7 @@ describe('plugin', () => {
      () => { contains('app/app.component.ts', 'entity-amp', '&amp;', '&gt;', '&lt;', '&iota;'); });
 
   it('should be able to return html elements', () => {
-    let htmlTags = ['<h1>', '<h2>', '<div>', '<span>'];
+    let htmlTags = ['<h1', '<h2', '<div', '<span'];
     let locations = ['start-tag-h1', 'h1-content', 'empty', 'start-tag', 'start-tag-after-h'];
     for (let location of locations) {
       contains('app/app.component.ts', location, ...htmlTags);
