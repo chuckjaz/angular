@@ -1,4 +1,4 @@
-import {MockData} from './test-utils';
+import {MockData} from './test_utils';
 
 export const toh = {
   'app': {

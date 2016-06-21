@@ -5,8 +5,8 @@ import * as ts from 'typescript';
 
 import {LanguageServicePlugin} from '../src/plugin';
 
-import {toh} from './test-data';
-import {MockTypescriptHost} from './test-utils';
+import {toh} from './test_data';
+import {MockTypescriptHost} from './test_utils';
 
 describe('plugin', () => {
   let documentRegistry = ts.createDocumentRegistry();
@@ -37,7 +37,7 @@ describe('plugin', () => {
 
   it('should be able to return html elements', () => {
     let htmlTags = ['<h1>', '<h2>', '<div>', '<span>'];
-    let locations = ['h1-content', 'empty', 'start-tag', 'start-tag-after-h', 'start-tag-h1'];
+    let locations = ['start-tag-h1', 'h1-content', 'empty', 'start-tag', 'start-tag-after-h'];
     for (let location of locations) {
       contains('app/app.component.ts', location, ...htmlTags);
     }
