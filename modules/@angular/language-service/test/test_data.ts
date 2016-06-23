@@ -20,7 +20,7 @@ import { HeroService }         from './hero.service';
       <a [routerLink]="['Heroes']">Heroes</a>
     </nav>
     &~{entity-amp}amp;
-    <router-outlet></router-outlet>
+    <router-outlet ~{outlet-attrs}></router-outlet>
   \`,
   styleUrls: ['app/app.component.css'],
   directives: [ROUTER_DIRECTIVES],
@@ -501,7 +501,13 @@ export declare class InMemoryBackendService {
      */
     protected _resetDb(): void;
     protected _setStatusText(options: ResponseOptions): ResponseOptions;
-}`
-  },
+}`,
+  'platform.ts': `
+import {Component} from '@angular/core';
+import {CORE_DIRECTIVES} from '@angular/common';
 
+@Component({directives: CORE_DIRECTIVES})
+class Platform {}
+  `
+  },
 }
