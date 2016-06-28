@@ -132,7 +132,7 @@ class Extractor {
       compilerHost: ts.CompilerHost): Extractor {
     const xhr: compiler.XHR = {get: (s: string) => Promise.resolve(compilerHost.readFile(s))};
     const urlResolver: compiler.UrlResolver = compiler.createOfflineCompileUrlResolver();
-    const reflectorHost = new ReflectorHost(program, compilerHost, options);
+    const reflectorHost = new ReflectorHost(ts, program, compilerHost, options);
     const staticReflector = new StaticReflector(reflectorHost);
     StaticAndDynamicReflectionCapabilities.install(staticReflector);
     const htmlParser = new HtmlParser();

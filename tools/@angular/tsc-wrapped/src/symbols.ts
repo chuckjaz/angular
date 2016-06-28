@@ -3,9 +3,10 @@ import * as ts from 'typescript';
 import {MetadataValue} from './schema';
 
 export class Symbols {
+  private ts: typeof ts;
   private _symbols: Map<string, MetadataValue>;
 
-  constructor(private sourceFile: ts.SourceFile) {}
+  constructor(typescript: typeof ts, private sourceFile: ts.SourceFile) { this.ts = typescript; }
 
   resolve(name: string): MetadataValue|undefined { return this.symbols.get(name); }
 
@@ -29,10 +30,10 @@ export class Symbols {
     const stripQuotes = (s: string) => s.replace(/^['"]|['"]$/g, '');
     const visit = (node: ts.Node) => {
       switch (node.kind) {
-        case ts.SyntaxKind.ImportEqualsDeclaration:
+        case this.ts.SyntaxKind.ImportEqualsDeclaration:
           const importEqualsDeclaration = <ts.ImportEqualsDeclaration>node;
           if (importEqualsDeclaration.moduleReference.kind ===
-              ts.SyntaxKind.ExternalModuleReference) {
+              this.ts.SyntaxKind.ExternalModuleReference) {
             const externalReference =
                 <ts.ExternalModuleReference>importEqualsDeclaration.moduleReference;
             // An `import <identifier> = require(<module-specifier>);
@@ -44,7 +45,7 @@ export class Symbols {
                 {__symbolic: 'error', message: `Unsupported import syntax`});
           }
           break;
-        case ts.SyntaxKind.ImportDeclaration:
+        case this.ts.SyntaxKind.ImportDeclaration:
           const importDecl = <ts.ImportDeclaration>node;
           if (!importDecl.importClause) {
             // An `import <module-specifier>` clause which does not bring symbols into scope.
@@ -60,7 +61,7 @@ export class Symbols {
           const bindings = importDecl.importClause.namedBindings;
           if (bindings) {
             switch (bindings.kind) {
-              case ts.SyntaxKind.NamedImports:
+              case this.ts.SyntaxKind.NamedImports:
                 // An `import { [<identifier> [, <identifier>] } from <module-specifier>` clause
                 for (let binding of (<ts.NamedImports>bindings).elements) {
                   symbols.set(binding.name.text, {
@@ -70,7 +71,7 @@ export class Symbols {
                   });
                 }
                 break;
-              case ts.SyntaxKind.NamespaceImport:
+              case this.ts.SyntaxKind.NamespaceImport:
                 // An `input * as <identifier> from <module-specifier>` clause.
                 symbols.set(
                     (<ts.NamespaceImport>bindings).name.text,
@@ -80,10 +81,10 @@ export class Symbols {
           }
           break;
       }
-      ts.forEachChild(node, visit);
+      this.ts.forEachChild(node, visit);
     };
     if (this.sourceFile) {
-      ts.forEachChild(this.sourceFile, visit);
+      this.ts.forEachChild(this.sourceFile, visit);
     }
   }
 }

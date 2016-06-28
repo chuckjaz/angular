@@ -23,8 +23,8 @@ describe('Evaluator', () => {
     service = ts.createLanguageService(host, documentRegistry);
     program = service.getProgram();
     typeChecker = program.getTypeChecker();
-    symbols = new Symbols(null);
-    evaluator = new Evaluator(symbols);
+    symbols = new Symbols(ts, null);
+    evaluator = new Evaluator(ts, symbols);
   });
 
   it('should not have typescript errors in test data', () => {
@@ -132,7 +132,7 @@ describe('Evaluator', () => {
 
   it('should return new expressions', () => {
     symbols.define('Value', {__symbolic: 'reference', module: './classes', name: 'Value'});
-    evaluator = new Evaluator(symbols);
+    evaluator = new Evaluator(ts, symbols);
     var newExpression = program.getSourceFile('newExpression.ts');
     expect(evaluator.evaluateNode(findVar(newExpression, 'someValue').initializer)).toEqual({
       __symbolic: 'new',

@@ -1,8 +1,9 @@
-import {MetadataCollector, ModuleMetadata, StaticReflectorHost, StaticSymbol} from '@angular/compiler-cli';
+import {StaticReflectorHost, StaticSymbol} from '@angular/compiler-cli/src/static_reflector';
+import {AssetUrl} from '@angular/compiler/src/output/path_util';
+import {MetadataCollector} from '@angular/tsc-wrapped/src/collector';
+import {ModuleMetadata} from '@angular/tsc-wrapped/src/schema';
 import * as path from 'path';
 import * as ts from 'typescript';
-
-import {AssetUrl} from './compiler-private';
 
 const EXT = /(\.ts|\.d\.ts|\.js|\.jsx|\.tsx)$/;
 const DTS = /\.d\.ts$/;
@@ -32,14 +33,18 @@ class ReflectorModuleModuleResolutionHost implements ts.ModuleResolutionHost {
 }
 
 export class ReflectorHost implements StaticReflectorHost {
-  private metadataCollector = new MetadataCollector();
+  private ts: typeof ts;
+  private metadataCollector: MetadataCollector;
   private moduleResolverHost: ReflectorModuleModuleResolutionHost;
   private _typeChecker: ts.TypeChecker;
 
   constructor(
-      private program: ts.Program, private serviceHost: ts.LanguageServiceHost,
-      private options: ts.CompilerOptions, private basePath: string) {
+      typescript: typeof ts, private program: ts.Program,
+      private serviceHost: ts.LanguageServiceHost, private options: ts.CompilerOptions,
+      private basePath: string) {
+    this.ts = typescript;
     this.moduleResolverHost = new ReflectorModuleModuleResolutionHost(serviceHost);
+    this.metadataCollector = new MetadataCollector(typescript);
   }
 
   angularImportLocations() {
@@ -54,8 +59,9 @@ export class ReflectorHost implements StaticReflectorHost {
   }
 
   private resolve(m: string, containingFile: string) {
-    const resolved = ts.resolveModuleName(m, containingFile, this.options, this.moduleResolverHost)
-                         .resolvedModule;
+    const resolved =
+        this.ts.resolveModuleName(m, containingFile, this.options, this.moduleResolverHost)
+            .resolvedModule;
     return resolved ? resolved.resolvedFileName : null;
   };
 
@@ -145,7 +151,7 @@ export class ReflectorHost implements StaticReflectorHost {
         throw new Error(`can't find symbol ${symbolName} exported from module ${filePath}`);
       }
       if (symbol &&
-          symbol.flags & ts.SymbolFlags.Alias) {  // This is an alias, follow what it aliases
+          symbol.flags & this.ts.SymbolFlags.Alias) {  // This is an alias, follow what it aliases
         symbol = tc.getAliasedSymbol(symbol);
       }
       const declaration = symbol.getDeclarations()[0];

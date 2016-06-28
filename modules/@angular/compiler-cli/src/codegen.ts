@@ -143,11 +143,12 @@ export class CodeGenerator {
   }
 
   static create(
-      options: AngularCompilerOptions, program: ts.Program, compilerHost: ts.CompilerHost,
-      reflectorHostContext?: ReflectorHostContext): CodeGenerator {
+      typescript: typeof ts, options: AngularCompilerOptions, program: ts.Program,
+      compilerHost: ts.CompilerHost, reflectorHostContext?: ReflectorHostContext): CodeGenerator {
     const xhr: compiler.XHR = {get: (s: string) => Promise.resolve(compilerHost.readFile(s))};
     const urlResolver: compiler.UrlResolver = compiler.createOfflineCompileUrlResolver();
-    const reflectorHost = new ReflectorHost(program, compilerHost, options, reflectorHostContext);
+    const reflectorHost =
+        new ReflectorHost(typescript, program, compilerHost, options, reflectorHostContext);
     const staticReflector = new StaticReflector(reflectorHost);
     StaticAndDynamicReflectionCapabilities.install(staticReflector);
     const htmlParser = new HtmlParser();

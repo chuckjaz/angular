@@ -1,4 +1,7 @@
-import {AngularCompilerOptions, MetadataCollector, ModuleMetadata} from '@angular/tsc-wrapped';
+import {default as AngularCompilerOptions} from '@angular/tsc-wrapped/src/options';
+import {MetadataCollector} from '@angular/tsc-wrapped/src/collector';
+import {ModuleMetadata} from '@angular/tsc-wrapped/src/schema';
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
@@ -16,11 +19,16 @@ export interface ReflectorHostContext {
 }
 
 export class ReflectorHost implements StaticReflectorHost, ImportGenerator {
-  private metadataCollector = new MetadataCollector();
+  private metadataCollector: MetadataCollector;
   private context: ReflectorHostContext;
+  private ts: typeof ts;
+
   constructor(
-      private program: ts.Program, private compilerHost: ts.CompilerHost,
-      private options: AngularCompilerOptions, context?: ReflectorHostContext) {
+      private typescript: typeof ts, private program: ts.Program,
+      private compilerHost: ts.CompilerHost, private options: AngularCompilerOptions,
+      context?: ReflectorHostContext) {
+    this.ts = typescript;
+    this.metadataCollector = new MetadataCollector(typescript);
     this.context = context || new NodeReflectorHostContext();
   }
 
@@ -33,9 +41,10 @@ export class ReflectorHost implements StaticReflectorHost, ImportGenerator {
       provider: '@angular/core/src/di/provider'
     };
   }
+
   private resolve(m: string, containingFile: string) {
-    const resolved =
-        ts.resolveModuleName(m, containingFile, this.options, this.compilerHost).resolvedModule;
+    const resolved = this.ts.resolveModuleName(m, containingFile, this.options, this.compilerHost)
+                         .resolvedModule;
     return resolved ? resolved.resolvedFileName : null;
   };
 
@@ -133,7 +142,7 @@ export class ReflectorHost implements StaticReflectorHost, ImportGenerator {
         throw new Error(`can't find symbol ${symbolName} exported from module ${filePath}`);
       }
       if (symbol &&
-          symbol.flags & ts.SymbolFlags.Alias) {  // This is an alias, follow what it aliases
+          symbol.flags & this.ts.SymbolFlags.Alias) {  // This is an alias, follow what it aliases
         symbol = tc.getAliasedSymbol(symbol);
       }
       const declaration = symbol.getDeclarations()[0];

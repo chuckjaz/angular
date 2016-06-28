@@ -18,7 +18,7 @@ describe('Collector', () => {
     ]);
     service = ts.createLanguageService(host);
     program = service.getProgram();
-    collector = new MetadataCollector();
+    collector = new MetadataCollector(ts);
   });
 
   it('should not have errors in test data', () => { expectValidSources(service, program); });
@@ -447,9 +447,9 @@ const FILES: Directory = {
   `,
   'unsupported-2.ts': `
     import {Injectable} from 'angular2/core';
- 
+
     class Foo {}
-    
+
     @Injectable()
     export class Bar {
       constructor(private f: Foo) {}

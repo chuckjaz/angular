@@ -1,2 +1,4 @@
-export * from './src/plugin';
-export * from './src/service';
+require('reflect-metadata');
+import {LanguageServicePlugin} from './src/plugin';
+
+export default LanguageServicePlugin;

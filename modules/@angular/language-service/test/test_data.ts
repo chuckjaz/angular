@@ -502,7 +502,7 @@ export declare class InMemoryBackendService {
     protected _resetDb(): void;
     protected _setStatusText(options: ResponseOptions): ResponseOptions;
 }`,
-  'platform.ts': `
+    'platform.ts': `
 import {Component} from '@angular/core';
 import {CORE_DIRECTIVES} from '@angular/common';
 

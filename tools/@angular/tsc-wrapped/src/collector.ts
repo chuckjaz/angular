@@ -4,32 +4,31 @@ import {Evaluator, ImportMetadata, ImportSpecifierMetadata, errorSymbol, isPrimi
 import {ClassMetadata, ConstructorMetadata, MemberMetadata, MetadataError, MetadataMap, MetadataSymbolicExpression, MetadataSymbolicReferenceExpression, MetadataValue, MethodMetadata, ModuleMetadata, VERSION, isMetadataError, isMetadataSymbolicReferenceExpression} from './schema';
 import {Symbols} from './symbols';
 
-
 /**
  * Collect decorator metadata from a TypeScript module.
  */
 export class MetadataCollector {
-  constructor() {}
+  private ts: typeof ts;
+
+  constructor(typescript: typeof ts) { this.ts = typescript; }
 
   /**
    * Returns a JSON.stringify friendly form describing the decorators of the exported classes from
    * the source file that is expected to correspond to a module.
    */
   public getMetadata(sourceFile: ts.SourceFile): ModuleMetadata {
-    const locals = new Symbols(sourceFile);
-    const evaluator = new Evaluator(locals);
+    const locals = new Symbols(this.ts, sourceFile);
+    const evaluator = new Evaluator(this.ts, locals);
     let metadata: {[name: string]: MetadataValue | ClassMetadata}|undefined;
 
     function objFromDecorator(decoratorNode: ts.Decorator): MetadataSymbolicExpression {
       return <MetadataSymbolicExpression>evaluator.evaluateNode(decoratorNode.expression);
     }
 
-    function errorSym(
-        message: string, node?: ts.Node, context?: {[name: string]: string}): MetadataError {
-      return errorSymbol(message, node, context, sourceFile);
-    }
+    const errorSym = (message: string, node?: ts.Node, context?: {[name: string]: string}) =>
+        errorSymbol(this.ts, message, node, context, sourceFile);
 
-    function classMetadataOf(classDeclaration: ts.ClassDeclaration): ClassMetadata {
+    const classMetadataOf = (classDeclaration: ts.ClassDeclaration): ClassMetadata => {
       let result: ClassMetadata = {__symbolic: 'class'};
 
       function getDecorators(decorators: ts.Decorator[]): MetadataSymbolicExpression[] {
@@ -63,10 +62,10 @@ export class MetadataCollector {
       for (const member of classDeclaration.members) {
         let isConstructor = false;
         switch (member.kind) {
-          case ts.SyntaxKind.Constructor:
+          case this.ts.SyntaxKind.Constructor:
             isConstructor = true;
           // fallthrough
-          case ts.SyntaxKind.MethodDeclaration:
+          case this.ts.SyntaxKind.MethodDeclaration:
             const method = <ts.MethodDeclaration|ts.ConstructorDeclaration>member;
             const methodDecorators = getDecorators(method.decorators);
             const parameters = method.parameters;
@@ -103,9 +102,9 @@ export class MetadataCollector {
               recordMember(name, data);
             }
             break;
-          case ts.SyntaxKind.PropertyDeclaration:
-          case ts.SyntaxKind.GetAccessor:
-          case ts.SyntaxKind.SetAccessor:
+          case this.ts.SyntaxKind.PropertyDeclaration:
+          case this.ts.SyntaxKind.GetAccessor:
+          case this.ts.SyntaxKind.SetAccessor:
             const property = <ts.PropertyDeclaration>member;
             const propertyDecorators = getDecorators(property.decorators);
             if (propertyDecorators) {
@@ -122,15 +121,15 @@ export class MetadataCollector {
       }
 
       return result.decorators || members ? result : undefined;
-    }
+    };
 
     // Predeclare classes
-    ts.forEachChild(sourceFile, node => {
+    this.ts.forEachChild(sourceFile, node => {
       switch (node.kind) {
-        case ts.SyntaxKind.ClassDeclaration:
+        case this.ts.SyntaxKind.ClassDeclaration:
           const classDeclaration = <ts.ClassDeclaration>node;
           const className = classDeclaration.name.text;
-          if (node.flags & ts.NodeFlags.Export) {
+          if (node.flags & this.ts.NodeFlags.Export) {
             locals.define(className, {__symbolic: 'reference', name: className});
           } else {
             locals.define(
@@ -139,12 +138,12 @@ export class MetadataCollector {
           break;
       }
     });
-    ts.forEachChild(sourceFile, node => {
+    this.ts.forEachChild(sourceFile, node => {
       switch (node.kind) {
-        case ts.SyntaxKind.ClassDeclaration:
+        case this.ts.SyntaxKind.ClassDeclaration:
           const classDeclaration = <ts.ClassDeclaration>node;
           const className = classDeclaration.name.text;
-          if (node.flags & ts.NodeFlags.Export) {
+          if (node.flags & this.ts.NodeFlags.Export) {
             if (classDeclaration.decorators) {
               if (!metadata) metadata = {};
               metadata[className] = classMetadataOf(classDeclaration);
@@ -152,10 +151,10 @@ export class MetadataCollector {
           }
           // Otherwise don't record metadata for the class.
           break;
-        case ts.SyntaxKind.VariableStatement:
+        case this.ts.SyntaxKind.VariableStatement:
           const variableStatement = <ts.VariableStatement>node;
           for (let variableDeclaration of variableStatement.declarationList.declarations) {
-            if (variableDeclaration.name.kind == ts.SyntaxKind.Identifier) {
+            if (variableDeclaration.name.kind == this.ts.SyntaxKind.Identifier) {
               let nameNode = <ts.Identifier>variableDeclaration.name;
               let varValue: MetadataValue;
               if (variableDeclaration.initializer) {
@@ -163,8 +162,8 @@ export class MetadataCollector {
               } else {
                 varValue = errorSym('Variable not initialized', nameNode);
               }
-              if (variableStatement.flags & ts.NodeFlags.Export ||
-                  variableDeclaration.flags & ts.NodeFlags.Export) {
+              if (variableStatement.flags & this.ts.NodeFlags.Export ||
+                  variableDeclaration.flags & this.ts.NodeFlags.Export) {
                 if (!metadata) metadata = {};
                 metadata[nameNode.text] = varValue;
               }
@@ -179,21 +178,21 @@ export class MetadataCollector {
               // are not supported.
               const report = (nameNode: ts.Node) => {
                 switch (nameNode.kind) {
-                  case ts.SyntaxKind.Identifier:
+                  case this.ts.SyntaxKind.Identifier:
                     const name = <ts.Identifier>nameNode;
                     const varValue = errorSym('Destructuring not supported', nameNode);
                     locals.define(name.text, varValue);
-                    if (node.flags & ts.NodeFlags.Export) {
+                    if (node.flags & this.ts.NodeFlags.Export) {
                       if (!metadata) metadata = {};
                       metadata[name.text] = varValue;
                     }
                     break;
-                  case ts.SyntaxKind.BindingElement:
+                  case this.ts.SyntaxKind.BindingElement:
                     const bindingElement = <ts.BindingElement>nameNode;
                     report(bindingElement.name);
                     break;
-                  case ts.SyntaxKind.ObjectBindingPattern:
-                  case ts.SyntaxKind.ArrayBindingPattern:
+                  case this.ts.SyntaxKind.ObjectBindingPattern:
+                  case this.ts.SyntaxKind.ArrayBindingPattern:
                     const bindings = <ts.BindingPattern>nameNode;
                     bindings.elements.forEach(report);
                     break;

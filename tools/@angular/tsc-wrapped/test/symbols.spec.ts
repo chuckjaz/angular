@@ -9,7 +9,7 @@ describe('Symbols', () => {
   let symbols: Symbols;
   const someValue = 'some-value';
 
-  beforeEach(() => symbols = new Symbols(null));
+  beforeEach(() => symbols = new Symbols(ts, null));
 
   it('should be able to add a symbol', () => symbols.define('someSymbol', someValue));
 
@@ -52,13 +52,13 @@ describe('Symbols', () => {
   })
 
   it('should be able to create symbols for a source file', () => {
-    let symbols = new Symbols(expressions);
+    let symbols = new Symbols(ts, expressions);
     expect(symbols).toBeDefined();
   });
 
 
   it('should be able to find symbols in expression', () => {
-    let symbols = new Symbols(expressions);
+    let symbols = new Symbols(ts, expressions);
     expect(symbols.has('someName')).toBeTruthy();
     expect(symbols.resolve('someName'))
         .toEqual({__symbolic: 'reference', module: './consts', name: 'someName'});
@@ -68,17 +68,17 @@ describe('Symbols', () => {
   });
 
   it('should be able to detect a * import', () => {
-    let symbols = new Symbols(imports);
+    let symbols = new Symbols(ts, imports);
     expect(symbols.resolve('b')).toEqual({__symbolic: 'reference', module: 'b'});
   });
 
   it('should be able to detect importing a default export', () => {
-    let symbols = new Symbols(imports);
+    let symbols = new Symbols(ts, imports);
     expect(symbols.resolve('d')).toEqual({__symbolic: 'reference', module: 'd', default: true});
   });
 
   it('should be able to import a renamed symbol', () => {
-    let symbols = new Symbols(imports);
+    let symbols = new Symbols(ts, imports);
     expect(symbols.resolve('g')).toEqual({__symbolic: 'reference', name: 'f', module: 'f'});
   });
 

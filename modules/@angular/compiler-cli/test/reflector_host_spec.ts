@@ -25,7 +25,7 @@ describe('reflector_host', () => {
       throw new Error('Expected no errors');
     }
     reflectorHost = new ReflectorHost(
-        program, host, {
+        ts, program, host, {
           genDir: '/tmp/dist',
           basePath: '/tmp/src',
           skipMetadataEmit: false,

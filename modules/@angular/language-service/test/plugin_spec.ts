@@ -24,7 +24,7 @@ describe('plugin', () => {
 
   let plugin: LanguageServicePlugin;
 
-  beforeEach(() => { plugin = new LanguageServicePlugin(mockHost, service); });
+  beforeEach(() => { plugin = new LanguageServicePlugin(ts, mockHost, service); });
 
   it('should not report template errors on tour of heroes', () => {
     for (let source of program.getSourceFiles()) {
@@ -43,9 +43,8 @@ describe('plugin', () => {
     }
   });
 
-  it('should be able to return element diretives', () => {
-    contains('app/app.component.ts', 'empty', '<router-outlet');
-  });
+  it('should be able to return element diretives',
+     () => { contains('app/app.component.ts', 'empty', '<router-outlet'); });
 
   it('should be able to return h1 attributes',
      () => { contains('app/app.component.ts', 'h1-after-space', 'id', 'dir', 'lang', 'onclick'); });
@@ -53,9 +52,8 @@ describe('plugin', () => {
   it('should be able to return a attributes (in the name span)',
      () => { contains('app/app.component.ts', 'a-attr-name', 'id', 'dir', 'lang'); });
 
-  it('should be able to return attribugtes from directives', () => {
-    contains('app/app.component.ts', 'outlet-attrs', '(activate)');
-  });
+  it('should be able to return attribugtes from directives',
+     () => { contains('app/app.component.ts', 'outlet-attrs', '(activate)'); });
 
   function contains(fileName: string, locationMarker: string, ...names: string[]) {
     let location = mockHost.getMarkerLocations(fileName)[locationMarker];

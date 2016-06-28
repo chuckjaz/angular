@@ -1,9 +1,10 @@
-import {StaticReflector} from '@angular/compiler-cli';
+import {StaticReflector} from '@angular/compiler-cli/src/static_reflector';
 import {DirectiveResolver} from '@angular/compiler/src/directive_resolver';
 import {CompileMetadataResolver} from '@angular/compiler/src/metadata_resolver';
 import {PipeResolver} from '@angular/compiler/src/pipe_resolver';
 import {ViewResolver} from '@angular/compiler/src/view_resolver';
 import {Type} from '@angular/core';
+import * as path from 'path';
 import * as ts from 'typescript';
 
 import {ReflectorHost} from './reflector_host';
@@ -11,11 +12,17 @@ import {LanguageService, LanguageServiceHost, TemplateSource, TemplateSources, c
 import {spanOf} from './utils';
 
 class ServiceHost implements LanguageServiceHost {
+  private ts: typeof ts;
   private _resolver: CompileMetadataResolver;
   private _reflector: StaticReflector;
   private _reflectorHost: ReflectorHost;
+  private context: string|undefined;
 
-  constructor(private host: ts.LanguageServiceHost, private service: ts.LanguageService) {}
+  constructor(
+      typescript: typeof ts, private host: ts.LanguageServiceHost,
+      private service: ts.LanguageService) {
+    this.ts = typescript;
+  }
 
   /**
    * Angular LanguageServiceHost implementation
@@ -33,9 +40,10 @@ class ServiceHost implements LanguageServiceHost {
   }
 
   getTemplateAt(fileName: string, position: number): TemplateSource|undefined {
+    this.context = fileName;
     let sourceFile = this.getSourceFile(fileName);
     if (sourceFile) {
-      let node = findNode(sourceFile, position);
+      let node = this.findNode(sourceFile, position);
       if (node) {
         return this.getSourceFromNode(
             fileName, this.host.getScriptVersion(sourceFile.fileName), node);
@@ -44,6 +52,7 @@ class ServiceHost implements LanguageServiceHost {
   }
 
   getTemplates(fileName: string): TemplateSources {
+    this.context = fileName;
     let version = this.host.getScriptVersion(fileName);
     let result: TemplateSource[] = [];
 
@@ -53,10 +62,14 @@ class ServiceHost implements LanguageServiceHost {
       if (templateSource) {
         result.push(templateSource);
       } else {
-        ts.forEachChild(child, visit);
+        this.ts.forEachChild(child, visit);
       }
     };
 
+    let sourceFile = this.getSourceFile(fileName);
+    if (sourceFile) {
+      this.ts.forEachChild(sourceFile, visit);
+    }
     return result.length ? result : undefined;
   }
 
@@ -69,12 +82,12 @@ class ServiceHost implements LanguageServiceHost {
     let result: TemplateSource|undefined = undefined;
     let sourceFile = this.getSourceFile(fileName);
     switch (node.kind) {
-      case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
-      case ts.SyntaxKind.StringLiteral:
+      case this.ts.SyntaxKind.NoSubstitutionTemplateLiteral:
+      case this.ts.SyntaxKind.StringLiteral:
         let [declaration, decorator] = this.getTemplateClassDecl(node);
         if (declaration) {
           return {
-            version, source: stringOf(node),
+            version, source: this.stringOf(node),
                 span: {start: node.getStart() + 1, end: node.getEnd() - 1},
                 type: <Type><any>this.reflectorHost.getStaticSymbol(
                     sourceFile.fileName, declaration.name.text)
@@ -88,9 +101,19 @@ class ServiceHost implements LanguageServiceHost {
   private get reflectorHost(): ReflectorHost {
     let result = this._reflectorHost;
     if (!result) {
+      if (!this.context) {
+        throw new Error('Internal error: no context');
+      }
+
+      // Use the file context's directory as the base directory.
+      // The host's getCurrentDirectory() is not reliable as it is always "" in
+      // tsserver. We don't need the exact base directory, just one that contains
+      // a source file.
+
+      const basePath = path.dirname(this.context);
       result = this._reflectorHost = new ReflectorHost(
-          this.service.getProgram(), this.host, this.host.getCompilationSettings(),
-          this.host.getCurrentDirectory());
+          this.ts, this.service.getProgram(), this.host, this.host.getCompilationSettings(),
+          basePath);
     }
     return result;
   }
@@ -115,7 +138,7 @@ class ServiceHost implements LanguageServiceHost {
     if (!parentNode) {
       return missing;
     }
-    if (parentNode.kind !== ts.SyntaxKind.PropertyAssignment) {
+    if (parentNode.kind !== this.ts.SyntaxKind.PropertyAssignment) {
       return missing;
     } else {
       // TODO: Is this different for a literal, i.e. a quoted property name like "template"?
@@ -124,35 +147,62 @@ class ServiceHost implements LanguageServiceHost {
       }
     }
     parentNode = parentNode.parent;  // ObjectLiteralExpression
-    if (!parentNode || parentNode.kind !== ts.SyntaxKind.ObjectLiteralExpression) {
+    if (!parentNode || parentNode.kind !== this.ts.SyntaxKind.ObjectLiteralExpression) {
       return missing;
     }
 
     parentNode = parentNode.parent;  // CallExpression
-    if (!parentNode || parentNode.kind !== ts.SyntaxKind.CallExpression) {
+    if (!parentNode || parentNode.kind !== this.ts.SyntaxKind.CallExpression) {
       return missing;
     }
     const callTarget = (<ts.CallExpression>parentNode).expression;
 
     let decorator = parentNode.parent;  // Decorator
-    if (!decorator || decorator.kind !== ts.SyntaxKind.Decorator) {
+    if (!decorator || decorator.kind !== this.ts.SyntaxKind.Decorator) {
       return missing;
     }
 
     let declaration = <ts.ClassDeclaration>decorator.parent;  // ClassDeclaration
-    if (!declaration || declaration.kind !== ts.SyntaxKind.ClassDeclaration) {
+    if (!declaration || declaration.kind !== this.ts.SyntaxKind.ClassDeclaration) {
       return missing;
     }
     return [declaration, callTarget];
   }
+
+  private stringOf(node: ts.Node): string|undefined {
+    switch (node.kind) {
+      case this.ts.SyntaxKind.NoSubstitutionTemplateLiteral:
+        return (<ts.LiteralExpression>node).text;
+      case this.ts.SyntaxKind.StringLiteral:
+        return (<ts.StringLiteral>node).text;
+    }
+  }
+
+  private findNode(sourceFile: ts.SourceFile, position: number): ts.Node|undefined {
+    let _this = this;
+
+    function find(node: ts.Node): ts.Node|undefined {
+      if (position >= node.getStart() && position < node.getEnd()) {
+        return _this.ts.forEachChild(node, find) || node;
+      }
+    }
+
+    return find(sourceFile);
+  }
 }
 
 export class LanguageServicePlugin {
+  private ts: typeof ts;
   private serviceHost: ServiceHost;
   private service: LanguageService;
 
-  constructor(private host: ts.LanguageServiceHost, service: ts.LanguageService) {
-    this.serviceHost = new ServiceHost(host, service);
+  static __tsCompilerExtensionKind = 'language-service';
+
+  constructor(
+      typescript: typeof ts, private host: ts.LanguageServiceHost, service: ts.LanguageService,
+      registry?: ts.DocumentRegistry, args?: any) {
+    this.ts = typescript;
+    this.serviceHost = new ServiceHost(typescript, host, service);
     this.service = createLanguageService(this.serviceHost);
   }
 
@@ -170,7 +220,7 @@ export class LanguageServicePlugin {
           start: error.span.start,
           length: error.span.end - error.span.start,
           messageText: error.message,
-          category: ts.DiagnosticCategory.Error,
+          category: this.ts.DiagnosticCategory.Error,
           code: 0
         })
       }
@@ -193,23 +243,4 @@ export class LanguageServicePlugin {
       };
     }
   }
-}
-
-function stringOf(node: ts.Node): string|undefined {
-  switch (node.kind) {
-    case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
-      return (<ts.LiteralExpression>node).text;
-    case ts.SyntaxKind.StringLiteral:
-      return (<ts.StringLiteral>node).text;
-  }
-}
-
-function findNode(sourceFile: ts.SourceFile, position: number): ts.Node|undefined {
-  function find(node: ts.Node): ts.Node|undefined {
-    if (position >= node.getStart() && position < node.getEnd()) {
-      return ts.forEachChild(node, find) || node;
-    }
-  }
-
-  return find(sourceFile);
 }

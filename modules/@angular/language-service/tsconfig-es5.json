@@ -10,7 +10,7 @@
     "experimentalDecorators": true,
     "module": "commonjs",
     "moduleResolution": "node",
-    "outDir": "../../../dist/all/@angular/language-service/",
+    "outDir": "../../../dist/packages-dist/language-service/",
     "paths": {
       "@angular/core": ["../../../dist/packages-dist/core"],
       "@angular/core/*": ["../../../dist/packages-dist/core/*"],
@@ -24,12 +24,11 @@
     "rootDir": ".",
     "sourceMap": true,
     "inlineSources": true,
-    "target": "es5",
-    "lib": ["es6", "dom"]
+    "lib": ["es6", "dom"],
+    "target": "es5"
   },
   "files": [
     "index.ts",
-    "test/plugin_spec.ts",
     "../../../node_modules/@types/node/index.d.ts"
   ]
 }

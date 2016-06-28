@@ -1,19 +1,17 @@
-import {Type} from '@angular/core';
-
 import {CompileDirectiveMetadata, CompilePipeMetadata} from '@angular/compiler';
+import {MetadataCollector, StaticReflector, StaticReflectorHost, StaticSymbol} from '@angular/compiler-cli';
 import {Lexer} from '@angular/compiler/src/expression_parser/lexer';
 import {Parser} from '@angular/compiler/src/expression_parser/parser';
 import {HtmlAst, HtmlElementAst} from '@angular/compiler/src/html_ast';
 import {HtmlParser} from '@angular/compiler/src/html_parser';
-import {NAMED_ENTITIES, HtmlTagContentType, getHtmlTagDefinition, splitNsName} from '@angular/compiler/src/html_tags';
+import {HtmlTagContentType, NAMED_ENTITIES, getHtmlTagDefinition, splitNsName} from '@angular/compiler/src/html_tags';
 import {CompileMetadataResolver} from '@angular/compiler/src/metadata_resolver';
 import {ParseError, ParseSourceSpan} from '@angular/compiler/src/parse_util';
 import {DomElementSchemaRegistry} from '@angular/compiler/src/schema/dom_element_schema_registry';
 import {CssSelector, SelectorMatcher} from '@angular/compiler/src/selector';
 import {TemplateAst} from '@angular/compiler/src/template_ast';
 import {TemplateParser} from '@angular/compiler/src/template_parser';
-
-import {MetadataCollector, StaticReflector, StaticReflectorHost, StaticSymbol} from '@angular/compiler-cli';
+import {Type} from '@angular/core';
 
 import {attributeNames, elementNames} from './html_info';
 import {HtmlAstPath} from './html_path';
@@ -28,7 +26,7 @@ export interface TemplateSource {
   source: string;
   version: string;
   span: Span;
-  type: StaticSymbol | Type;
+  type: StaticSymbol|Type;
 }
 
 export type TemplateSources = TemplateSource[] | undefined;
@@ -36,20 +34,16 @@ export type TemplateSources = TemplateSource[] | undefined;
 interface AstResult {
   htmlAst?: HtmlAst[];
   templateAst?: TemplateAst[];
-  directive?: CompileDirectiveMetadata,
-  directives?: CompileDirectiveMetadata[],
-  pipes?: CompilePipeMetadata[],
-  parseErrors?: ParseError[];
+  directive?: CompileDirectiveMetadata, directives?: CompileDirectiveMetadata[],
+      pipes?: CompilePipeMetadata[], parseErrors?: ParseError[];
   errors?: Error[];
 }
 
 interface TemplateInfo {
   template: TemplateSource;
   htmlAst: HtmlAst[];
-  directive: CompileDirectiveMetadata,
-  directives: CompileDirectiveMetadata[],
-  pipes: CompilePipeMetadata[],
-  templateAst: TemplateAst[];
+  directive: CompileDirectiveMetadata, directives: CompileDirectiveMetadata[],
+      pipes: CompilePipeMetadata[], templateAst: TemplateAst[];
 }
 
 interface AttrInfo {
@@ -191,7 +185,8 @@ class LanguageServiceImpl implements LanguageService {
     let htmlNames = elementNames().filter(name => !(name in hiddenHtmlElements));
 
     // Collect the elements referenced by the selectors
-    let directiveElements = this.getSelectors(info).selectors.map(selector => selector.element).filter(name => !!name);
+    let directiveElements =
+        this.getSelectors(info).selectors.map(selector => selector.element).filter(name => !!name);
 
     // Return all HTML elements.
     return directiveElements.concat(htmlNames).map<Completion>(
@@ -207,15 +202,18 @@ class LanguageServiceImpl implements LanguageService {
       // Add html attributes
       let htmlAttributes = attributeNames(element.name) || [];
       if (htmlAttributes) {
-        attributes.push(...htmlAttributes.map<AttrInfo>(name => ({name, input: false, output: false})));
+        attributes.push(
+            ...htmlAttributes.map<AttrInfo>(name => ({name, input: false, output: false})));
       }
 
       let {selectors, map: selectorMap} = this.getSelectors(info);
       if (selectors && selectors.length) {
         // All the attributes that are selectable should be shown.
-        let attrs = flatten(selectors
-          .filter(selector => !selector.element || selector.element == element.name)
-          .map(selector => selector.attrs.filter(a => !!a))).map<AttrInfo>(name => ({name, input: false, output: false}));
+        let attrs =
+            flatten(
+                selectors.filter(selector => !selector.element || selector.element == element.name)
+                    .map(selector => selector.attrs.filter(a => !!a)))
+                .map<AttrInfo>(name => ({name, input: false, output: false}));
 
         // All input and output properties of the matching directives should be added.
         let elementSelector = createElementCssSelector(element);
@@ -224,47 +222,52 @@ class LanguageServiceImpl implements LanguageService {
         matcher.match(elementSelector, selector => {
           let directive = selectorMap.get(selector);
           if (directive) {
-            attrs.push(...Object.keys(directive.inputs).map(name => ({name, input: true, output: false})));
-            attrs.push(...Object.keys(directive.outputs).map(name => ({name, input: false, output: true})));
+            attrs.push(
+                ...Object.keys(directive.inputs).map(name => ({name, input: true, output: false})));
+            attrs.push(...Object.keys(directive.outputs)
+                           .map(name => ({name, input: false, output: true})));
           }
         });
 
         // If a name shows up twice, fold it into a single value.
         attrs = foldAttrs(attrs);
 
-        // Now expand them back out to ensure that input/output shows up as well as input and output.
+        // Now expand them back out to ensure that input/output shows up as well as input and
+        // output.
         attributes.push(...flatten(attrs.map(expandedAttr)));
       }
 
       // Map all the attributes to a completion
-      return attributes.map<Completion>(attr => (
-        {kind: 'attribute', name: nameOfAttr(attr), sort: attr.name}));
+      return attributes.map<Completion>(
+          attr => ({kind: 'attribute', name: nameOfAttr(attr), sort: attr.name}));
     }
     return undefined;
   }
 
-  private getSelectors(info: TemplateInfo): { selectors: CssSelector[], map: Map<CssSelector, CompileDirectiveMetadata>} {
+  private getSelectors(info: TemplateInfo):
+      {selectors: CssSelector[], map: Map<CssSelector, CompileDirectiveMetadata>} {
     let map = new Map<CssSelector, CompileDirectiveMetadata>();
     let selectors = flatten(info.directives.map(directive => {
       let selectors = CssSelector.parse(directive.selector);
       selectors.forEach(selector => map.set(selector, directive));
       return selectors;
     }));
-    return { selectors, map };
+    return {selectors, map};
   }
 
   private getTemplateAstAtPosition(fileName: string, position: number): TemplateInfo|undefined {
     let template = this.host.getTemplateAt(fileName, position);
     if (template) {
       let astResult = this.getTemplateAst(template);
-      if (astResult.htmlAst && astResult.templateAst)
+      if (astResult && astResult.htmlAst && astResult.templateAst)
         return {
           template,
           htmlAst: astResult.htmlAst,
           directive: astResult.directive,
           directives: astResult.directives,
           pipes: astResult.pipes,
-          templateAst: astResult.templateAst};
+          templateAst: astResult.templateAst
+        };
     }
     return undefined;
   }
@@ -280,14 +283,11 @@ class LanguageServiceImpl implements LanguageService {
         let htmlResult = htmlParser.parse(template.source, '');
         let directives = this.metadataResolver.getViewDirectivesMetadata(<Type>template.type);
         let pipes = this.metadataResolver.getViewPipesMetadata(<Type>template.type);
-        let parseResult = parser.tryParseHtml(
-            htmlResult, directive, template.source, directives, pipes, '');
+        let parseResult =
+            parser.tryParseHtml(htmlResult, directive, template.source, directives, pipes, '');
         result = {
           htmlAst: htmlResult.rootNodes,
-          templateAst: parseResult.templateAst,
-          directive,
-          directives,
-          pipes,
+          templateAst: parseResult.templateAst, directive, directives, pipes,
           parseErrors: parseResult.errors
         };
       } catch (e) {
@@ -313,13 +313,17 @@ const hiddenHtmlElements = {
   link: true,
 }
 
-function flatten<T>(a: T[][]) {
+function
+flatten<T>(a: T[][]) {
   return (<T[]>[]).concat(...a);
 }
 
 function expandedAttr(attr: AttrInfo): AttrInfo[] {
   if (attr.input && attr.output) {
-    return [attr, { name: attr.name, input: true, output: false}, { name: attr.name, input: false, output: true}];
+    return [
+      attr, {name: attr.name, input: true, output: false},
+      {name: attr.name, input: false, output: true}
+    ];
   }
   return [attr];
 }
@@ -359,7 +363,7 @@ function foldAttrs(attrs: AttrInfo[]): AttrInfo[] {
       result.push(cloneAttr);
       map.set(attr.name, cloneAttr);
     }
-  })
+  }); 
   return result;
 }
 
@@ -374,7 +378,7 @@ function createElementCssSelector(element: HtmlElementAst): CssSelector {
     if (!attr.name.match(templateAttr)) {
       let [_, attrNameNoNs] = splitNsName(attr.name);
       cssSelector.addAttribute(attrNameNoNs, attr.value);
-      if (attr.name.toLowerCase() == "class") {
+      if (attr.name.toLowerCase() == 'class') {
         var classes = attr.value.split(/s+/g);
         classes.forEach(className => cssSelector.addClassName(className));
       }

@@ -21,7 +21,7 @@ export class HtmlAstPath {
 
   childOf(node: HtmlAst): HtmlAst|undefined { return this.path[this.path.indexOf(node) + 1]; }
 
-  first<T extends HtmlAst>(ctor: { new (...args: any[]): T}): T | undefined {
+  first<T extends HtmlAst>(ctor: {new (...args: any[]): T}): T|undefined {
     for (let i = this.path.length - 1; i >= 0; i--) {
       let item = this.path[i];
       if (item instanceof ctor) return <T>item;

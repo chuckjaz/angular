@@ -65,7 +65,7 @@ interface DecoratorInvocation {
 const IGNORED_FILES = /\.ngfactory\.js$|\.css\.js$|\.css\.shim\.js$/;
 
 export class MetadataWriterHost extends DelegatingHost {
-  private metadataCollector = new MetadataCollector();
+  private metadataCollector = new MetadataCollector(ts);
   constructor(delegate: ts.CompilerHost, private program: ts.Program) { super(delegate); }
 
   private writeMetadata(emitFilePath: string, sourceFile: ts.SourceFile) {

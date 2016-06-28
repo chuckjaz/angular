@@ -51,7 +51,8 @@ for PACKAGE in \
   router \
   router-deprecated \
   upgrade \
-  compiler-cli
+  compiler-cli \
+  language-service
 do
   SRCDIR=./modules/@angular/${PACKAGE}
   DESTDIR=./dist/packages-dist/${PACKAGE}
@@ -80,7 +81,7 @@ do
     find ${DESTDIR} -type f -name '*.d.ts' -print0 | xargs -0 sed -i '' -E 's/^( +)abstract ([[:alnum:]]+\:)/\1\2/g'
   fi
 
-  if [[ ${PACKAGE} != compiler-cli ]]; then
+  if [[ ${PACKAGE} != compiler-cli ]] && [[ ${PACKAGE} != language-service ]] && [[ ${SKIP_BUNDLING} != true ]]; then
 
     if [[ ${PACKAGE} == "router-deprecated" ]]; then
       echo "====== (esm)COMPILING: \$(npm bin)/tsc -p ${SRCDIR}/tsconfig-es2015.json ====="

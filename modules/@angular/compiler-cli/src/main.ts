@@ -10,7 +10,7 @@ import {CodeGenerator} from './codegen';
 
 function codegen(
     ngOptions: tsc.AngularCompilerOptions, program: ts.Program, host: ts.CompilerHost) {
-  return CodeGenerator.create(ngOptions, program, host).codegen();
+  return CodeGenerator.create(ts, ngOptions, program, host).codegen();
 }
 
 // CLI entry point
