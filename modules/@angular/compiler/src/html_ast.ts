@@ -74,7 +74,7 @@ export function htmlVisitAll(visitor: HtmlAstVisitor, asts: HtmlAst[], context: 
 
 export function htmlVisitEachChild(
     visitor: HtmlAstVisitor, ast: HtmlAst, context: any = null): any[] {
-  return ast.visit(new HtmlChildVisitor(visitor), context)
+  return ast.visit(new HtmlChildVisitor(visitor), context);
 }
 
 export class HtmlChildVisitor implements HtmlAstVisitor {

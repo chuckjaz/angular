@@ -10,7 +10,7 @@ import {MockTypescriptHost} from './test_utils';
 
 describe('plugin', () => {
   let documentRegistry = ts.createDocumentRegistry();
-  let mockHost = new MockTypescriptHost(['app/main.ts'], toh);
+  let mockHost = new MockTypescriptHost(['app/main.ts', 'app/parsing-cases.ts'], toh);
   let service = ts.createLanguageService(mockHost, documentRegistry);
   let program = service.getProgram();
 
@@ -28,7 +28,9 @@ describe('plugin', () => {
 
   it('should not report template errors on tour of heroes', () => {
     for (let source of program.getSourceFiles()) {
-      expectNoDiagnostics(plugin.getSemanticDiagnosticsFilter(source.fileName, []));
+      // Ignore all 'cases.ts' files as they intentionally contain errors.
+      if (!source.fileName.endsWith('cases.ts'))
+        expectNoDiagnostics(plugin.getSemanticDiagnosticsFilter(source.fileName, []));
     }
   });
 
@@ -54,6 +56,18 @@ describe('plugin', () => {
 
   it('should be able to return attribugtes from directives',
      () => { contains('app/app.component.ts', 'outlet-attrs', '(activate)'); });
+
+  it('should be able to return attributes of an incomplete element', () => {
+    contains('app/parsing-cases.ts', 'incomplete-open-lt', '<a');
+    contains('app/parsing-cases.ts', 'incomplete-open-a', '<a');
+    contains('app/parsing-cases.ts', 'incomplete-open-attr', 'id', 'dir', 'lang');
+  });
+
+  it('should be able to return completions with a missing closing tag',
+     () => { contains('app/parsing-cases.ts', 'missing-closing', '<h1', '<h2'); });
+
+  it('should be able to return common attributes of in an unknown tag',
+     () => { contains('app/parsing-cases.ts', 'unknown-element', 'id', 'dir', 'lang'); });
 
   function contains(fileName: string, locationMarker: string, ...names: string[]) {
     let location = mockHost.getMarkerLocations(fileName)[locationMarker];

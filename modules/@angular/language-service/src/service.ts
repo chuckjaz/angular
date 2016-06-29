@@ -2,7 +2,7 @@ import {CompileDirectiveMetadata, CompilePipeMetadata} from '@angular/compiler';
 import {MetadataCollector, StaticReflector, StaticReflectorHost, StaticSymbol} from '@angular/compiler-cli';
 import {Lexer} from '@angular/compiler/src/expression_parser/lexer';
 import {Parser} from '@angular/compiler/src/expression_parser/parser';
-import {HtmlAst, HtmlElementAst} from '@angular/compiler/src/html_ast';
+import {HtmlAst, HtmlElementAst, HtmlTextAst} from '@angular/compiler/src/html_ast';
 import {HtmlParser} from '@angular/compiler/src/html_parser';
 import {HtmlTagContentType, NAMED_ENTITIES, getHtmlTagDefinition, splitNsName} from '@angular/compiler/src/html_tags';
 import {CompileMetadataResolver} from '@angular/compiler/src/metadata_resolver';
@@ -34,16 +34,20 @@ export type TemplateSources = TemplateSource[] | undefined;
 interface AstResult {
   htmlAst?: HtmlAst[];
   templateAst?: TemplateAst[];
-  directive?: CompileDirectiveMetadata, directives?: CompileDirectiveMetadata[],
-      pipes?: CompilePipeMetadata[], parseErrors?: ParseError[];
+  directive?: CompileDirectiveMetadata;
+  directives?: CompileDirectiveMetadata[];
+  pipes?: CompilePipeMetadata[];
+  parseErrors?: ParseError[];
   errors?: Error[];
 }
 
 interface TemplateInfo {
   template: TemplateSource;
   htmlAst: HtmlAst[];
-  directive: CompileDirectiveMetadata, directives: CompileDirectiveMetadata[],
-      pipes: CompilePipeMetadata[], templateAst: TemplateAst[];
+  directive: CompileDirectiveMetadata;
+  directives: CompileDirectiveMetadata[];
+  pipes: CompilePipeMetadata[];
+  templateAst: TemplateAst[];
 }
 
 interface AttrInfo {
@@ -94,11 +98,16 @@ class LanguageServiceImpl implements LanguageService {
     if (templates && templates.length) {
       for (const template of templates) {
         const ast = this.getTemplateAst(template);
-        results =
-            (ast.parseErrors || [])
-                .map<Error>(
-                    e => ({span: offsetSpan(spanOf(e.span), template.span.start), message: e.msg}))
-                .concat(ast.errors || []);
+        if (ast) {
+          results =
+              (results || [])
+                  .concat(...(ast.parseErrors || [])
+                              .map<Error>(e => ({
+                                            span: offsetSpan(spanOf(e.span), template.span.start),
+                                            message: e.msg
+                                          }))
+                              .concat(ast.errors || []));
+        }
       }
     }
     return results;
@@ -146,12 +155,18 @@ class LanguageServiceImpl implements LanguageService {
                   if (element) {
                     let definition = getHtmlTagDefinition(element.name);
                     if (definition.contentType === HtmlTagContentType.PARSABLE_DATA) {
-                      // If the element can hold content Show element completions.
-                      result = _this.elementCompletions(templateInfo, path);
+                      result = _this.voidElementAttributeCompletions(templateInfo, path);
+                      if (!result) {
+                        // If the element can hold content Show element completions.
+                        result = _this.elementCompletions(templateInfo, path);
+                      }
                     }
                   } else {
                     // If no element container, implies parsable data so show elements.
-                    result = _this.elementCompletions(templateInfo, path);
+                    result = _this.voidElementAttributeCompletions(templateInfo, path);
+                    if (!result) {
+                      result = _this.elementCompletions(templateInfo, path);
+                    }
                   }
                 }
               },
@@ -193,53 +208,77 @@ class LanguageServiceImpl implements LanguageService {
         name => ({kind: 'element', name: `<${name}`, sort: name}));
   }
 
+  // There is a special case of HTML where text that contains a unclosed tag is treated as
+  // text. For exaple '<h1> Some <a text </h1>' produces a text nodes inside of the H1
+  // element "Some <a text". We, however, want to treat this as if the user was requesting
+  // the attributes of an "a" element, not requesting completion in the a text element. This
+  // code checks for this case and returns element completions if it is detected or undefined
+  // if it is not.
+  private voidElementAttributeCompletions(info: TemplateInfo, path: HtmlAstPath): Completions {
+    let tail = path.tail;
+    if (tail instanceof HtmlTextAst) {
+      let match = tail.value.match(/<(\w(\w|\d|-)*:)?(\w(\w|\d|-)*)\s/);
+      // The position must be after the match, otherwise we are still in a place where elements
+      // are expected (such as `<|a` or `<a|`; we only want attributes for `<a |` or after).
+      if (match && path.position >= match.index + match[0].length + tail.sourceSpan.start.offset) {
+        return this.attributeCompletionsForElement(info, match[3]);
+      }
+    }
+  }
+
+  private attributeCompletionsForElement(
+      info: TemplateInfo, elementName: string, element?: HtmlElementAst): Completions {
+    let attributes: AttrInfo[] = [];
+
+    // Add html attributes
+    let htmlAttributes = attributeNames(elementName) || [];
+    if (htmlAttributes) {
+      attributes.push(
+          ...htmlAttributes.map<AttrInfo>(name => ({name, input: false, output: false})));
+    }
+
+    let {selectors, map: selectorMap} = this.getSelectors(info);
+    if (selectors && selectors.length) {
+      // All the attributes that are selectable should be shown.
+      let attrs =
+          flatten(selectors.filter(selector => !selector.element || selector.element == elementName)
+                      .map(selector => selector.attrs.filter(a => !!a)))
+              .map<AttrInfo>(name => ({name, input: false, output: false}));
+
+      // All input and output properties of the matching directives should be added.
+      let elementSelector = element ? createElementCssSelector(element) :
+                                      createElementCssSelector(new HtmlElementAst(
+                                          elementName, [], [], undefined, undefined, undefined));
+
+      let matcher = new SelectorMatcher();
+      matcher.addSelectables(selectors);
+      matcher.match(elementSelector, selector => {
+        let directive = selectorMap.get(selector);
+        if (directive) {
+          attrs.push(
+              ...Object.keys(directive.inputs).map(name => ({name, input: true, output: false})));
+          attrs.push(
+              ...Object.keys(directive.outputs).map(name => ({name, input: false, output: true})));
+        }
+      });
+
+      // If a name shows up twice, fold it into a single value.
+      attrs = foldAttrs(attrs);
+
+      // Now expand them back out to ensure that input/output shows up as well as input and
+      // output.
+      attributes.push(...flatten(attrs.map(expandedAttr)));
+    }
+
+    // Map all the attributes to a completion
+    return attributes.map<Completion>(
+        attr => ({kind: 'attribute', name: nameOfAttr(attr), sort: attr.name}));
+  }
+
   private attributeCompletions(info: TemplateInfo, path: HtmlAstPath): Completions {
     let item = path.tail instanceof HtmlElementAst ? path.tail : path.parentOf(path.tail);
     if (item instanceof HtmlElementAst) {
-      let element = item;
-      let attributes: AttrInfo[] = [];
-
-      // Add html attributes
-      let htmlAttributes = attributeNames(element.name) || [];
-      if (htmlAttributes) {
-        attributes.push(
-            ...htmlAttributes.map<AttrInfo>(name => ({name, input: false, output: false})));
-      }
-
-      let {selectors, map: selectorMap} = this.getSelectors(info);
-      if (selectors && selectors.length) {
-        // All the attributes that are selectable should be shown.
-        let attrs =
-            flatten(
-                selectors.filter(selector => !selector.element || selector.element == element.name)
-                    .map(selector => selector.attrs.filter(a => !!a)))
-                .map<AttrInfo>(name => ({name, input: false, output: false}));
-
-        // All input and output properties of the matching directives should be added.
-        let elementSelector = createElementCssSelector(element);
-        let matcher = new SelectorMatcher();
-        matcher.addSelectables(selectors);
-        matcher.match(elementSelector, selector => {
-          let directive = selectorMap.get(selector);
-          if (directive) {
-            attrs.push(
-                ...Object.keys(directive.inputs).map(name => ({name, input: true, output: false})));
-            attrs.push(...Object.keys(directive.outputs)
-                           .map(name => ({name, input: false, output: true})));
-          }
-        });
-
-        // If a name shows up twice, fold it into a single value.
-        attrs = foldAttrs(attrs);
-
-        // Now expand them back out to ensure that input/output shows up as well as input and
-        // output.
-        attributes.push(...flatten(attrs.map(expandedAttr)));
-      }
-
-      // Map all the attributes to a completion
-      return attributes.map<Completion>(
-          attr => ({kind: 'attribute', name: nameOfAttr(attr), sort: attr.name}));
+      return this.attributeCompletionsForElement(info, item.name, item);
     }
     return undefined;
   }
@@ -311,10 +350,9 @@ const hiddenHtmlElements = {
   title: true,
   head: true,
   link: true,
-}
+};
 
-function
-flatten<T>(a: T[][]) {
+function flatten<T>(a: T[][]) {
   return (<T[]>[]).concat(...a);
 }
 
@@ -363,7 +401,7 @@ function foldAttrs(attrs: AttrInfo[]): AttrInfo[] {
       result.push(cloneAttr);
       map.set(attr.name, cloneAttr);
     }
-  }); 
+  });
   return result;
 }
 

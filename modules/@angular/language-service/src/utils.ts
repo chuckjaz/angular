@@ -4,6 +4,7 @@ import {Span} from './service';
 export interface SpanHolder {
   sourceSpan: ParseSourceSpan;
   endSourceSpan?: ParseSourceSpan;
+  children?: SpanHolder[];
 }
 
 export function isParseSourceSpan(value: any): value is ParseSourceSpan {
@@ -16,6 +17,11 @@ export function spanOf(span: SpanHolder | ParseSourceSpan): Span {
   } else {
     if (span.endSourceSpan) {
       return {start: span.sourceSpan.start.offset, end: span.endSourceSpan.end.offset};
+    } else if (span.children && span.children.length) {
+      return {
+        start: span.sourceSpan.start.offset,
+        end: spanOf(span.children[span.children.length - 1]).end
+      };
     }
     return {start: span.sourceSpan.start.offset, end: span.sourceSpan.end.offset};
   }

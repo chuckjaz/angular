@@ -40,9 +40,9 @@ class ServiceHost implements LanguageServiceHost {
   }
 
   getTemplateAt(fileName: string, position: number): TemplateSource|undefined {
-    this.context = fileName;
     let sourceFile = this.getSourceFile(fileName);
     if (sourceFile) {
+      this.context = sourceFile.path;
       let node = this.findNode(sourceFile, position);
       if (node) {
         return this.getSourceFromNode(
@@ -52,7 +52,6 @@ class ServiceHost implements LanguageServiceHost {
   }
 
   getTemplates(fileName: string): TemplateSources {
-    this.context = fileName;
     let version = this.host.getScriptVersion(fileName);
     let result: TemplateSource[] = [];
 
@@ -68,6 +67,7 @@ class ServiceHost implements LanguageServiceHost {
 
     let sourceFile = this.getSourceFile(fileName);
     if (sourceFile) {
+      this.context = sourceFile.path;
       this.ts.forEachChild(sourceFile, visit);
     }
     return result.length ? result : undefined;
@@ -87,11 +87,12 @@ class ServiceHost implements LanguageServiceHost {
         let [declaration, decorator] = this.getTemplateClassDecl(node);
         if (declaration) {
           return {
-            version, source: this.stringOf(node),
-                span: {start: node.getStart() + 1, end: node.getEnd() - 1},
-                type: <Type><any>this.reflectorHost.getStaticSymbol(
-                    sourceFile.fileName, declaration.name.text)
-          }
+            version,
+            source: this.stringOf(node),
+            span: {start: node.getStart() + 1, end: node.getEnd() - 1},
+            type: <Type><any>this.reflectorHost.getStaticSymbol(
+                sourceFile.path, declaration.name.text)
+          };
         }
         break;
     }
@@ -196,6 +197,7 @@ export class LanguageServicePlugin {
   private serviceHost: ServiceHost;
   private service: LanguageService;
 
+  /** @internal */
   static __tsCompilerExtensionKind = 'language-service';
 
   constructor(
@@ -222,7 +224,7 @@ export class LanguageServicePlugin {
           messageText: error.message,
           category: this.ts.DiagnosticCategory.Error,
           code: 0
-        })
+        });
       }
     }
     return previous;
