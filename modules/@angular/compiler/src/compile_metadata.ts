@@ -277,10 +277,11 @@ export class CompileIdentifierMap<KEY extends CompileMetadataWithIdentifier, VAL
     var rk = token.runtimeCacheKey;
     if (isPresent(rk)) {
       this._valueMap.set(rk, value);
-    }
-    var ak = token.assetCacheKey;
-    if (isPresent(ak)) {
-      this._valueMap.set(ak, value);
+    } else {
+      var ak = token.assetCacheKey;
+      if (isPresent(ak)) {
+        this._valueMap.set(ak, value);
+      }
     }
   }
   get(token: KEY): VALUE {
