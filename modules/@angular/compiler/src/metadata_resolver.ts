@@ -122,6 +122,7 @@ export class CompileMetadataResolver {
       var changeDetectionStrategy: ChangeDetectionStrategy = null;
       var viewProviders: Array<cpl.CompileProviderMetadata|cpl.CompileTypeMetadata|any[]> = [];
       var moduleUrl = staticTypeModuleUrl(directiveType);
+      var isPlaceholderUrl = false;
       var entryComponentMetadata: cpl.CompileTypeMetadata[] = [];
       let selector = dirMeta.selector;
       if (dirMeta instanceof ComponentMetadata) {
@@ -149,7 +150,10 @@ export class CompileMetadataResolver {
               dirMeta.viewProviders, entryComponentMetadata,
               `viewProviders for "${stringify(directiveType)}"`);
         }
-        moduleUrl = componentModuleUrl(this._reflector, directiveType, cmpMeta);
+        let {moduleUrl: url, isPlaceholderUrl: placeholder} =
+            componentModuleUrl(this._reflector, directiveType, cmpMeta);
+        moduleUrl = url;
+        isPlaceholderUrl = placeholder;
         if (cmpMeta.entryComponents) {
           entryComponentMetadata =
               flattenArray(cmpMeta.entryComponents)
@@ -182,7 +186,7 @@ export class CompileMetadataResolver {
         selector: selector,
         exportAs: dirMeta.exportAs,
         isComponent: isPresent(templateMeta),
-        type: this.getTypeMetadata(directiveType, moduleUrl),
+        type: this.getTypeMetadata(directiveType, moduleUrl, null, isPlaceholderUrl),
         template: templateMeta,
         changeDetection: changeDetectionStrategy,
         inputs: dirMeta.inputs,
@@ -423,12 +427,13 @@ export class CompileMetadataResolver {
     return false;
   }
 
-  getTypeMetadata(type: Type<any>, moduleUrl: string, dependencies: any[] = null):
-      cpl.CompileTypeMetadata {
+  getTypeMetadata(
+      type: Type<any>, moduleUrl: string, dependencies: any[] = null,
+      isPlaceholderUrl: boolean = false): cpl.CompileTypeMetadata {
     type = resolveForwardRef(type);
     return new cpl.CompileTypeMetadata({
       name: this.sanitizeTokenName(type),
-      moduleUrl: moduleUrl,
+      moduleUrl: moduleUrl, isPlaceholderUrl,
       runtime: type,
       diDeps: this.getDependenciesMetadata(type, dependencies),
       lifecycleHooks: LIFECYCLE_HOOKS_VALUES.filter(hook => hasLifecycleHook(hook, type)),
@@ -722,20 +727,21 @@ function staticTypeModuleUrl(value: any): string {
   return cpl.isStaticSymbol(value) ? value.filePath : null;
 }
 
-function componentModuleUrl(
-    reflector: ReflectorReader, type: any, cmpMetadata: ComponentMetadata): string {
+function componentModuleUrl(reflector: ReflectorReader, type: any, cmpMetadata: ComponentMetadata):
+    {moduleUrl: string, isPlaceholderUrl: boolean} {
   if (cpl.isStaticSymbol(type)) {
-    return staticTypeModuleUrl(type);
+    return {moduleUrl: staticTypeModuleUrl(type), isPlaceholderUrl: false};
   }
 
   if (isPresent(cmpMetadata.moduleId)) {
     var moduleId = cmpMetadata.moduleId;
     var scheme = getUrlScheme(moduleId);
-    return isPresent(scheme) && scheme.length > 0 ? moduleId :
-                                                    `package:${moduleId}${MODULE_SUFFIX}`;
+    return isPresent(scheme) && scheme.length > 0 ?
+        {moduleUrl: moduleId, isPlaceholderUrl: false} :
+        {moduleUrl: `package:${moduleId}${MODULE_SUFFIX}`, isPlaceholderUrl: false};
   }
 
-  return reflector.importUri(type);
+  return {moduleUrl: reflector.importUri(type), isPlaceholderUrl: true};
 }
 
 function convertToCompileValue(

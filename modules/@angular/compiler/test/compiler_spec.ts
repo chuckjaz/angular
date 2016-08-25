@@ -15,16 +15,20 @@ export function main() {
     it('should generate the correct output when constructors have the same name', () => {
       function ComponentFactory(selector: string, template: string) {
         @Component({selector, template})
-        class MyComponent { }
+        class MyComponent {
+        }
         return MyComponent;
       }
       const HeroComponent = ComponentFactory('my-hero', 'my hero');
       const VillianComponent = ComponentFactory('a-villian', 'a villian');
-      const MainComponent = ComponentFactory('my-app', 'I was saved by <my-hero></my-hero> from <a-villian></a-villian>.');
+      const MainComponent = ComponentFactory(
+          'my-app', 'I was saved by <my-hero></my-hero> from <a-villian></a-villian>.');
 
-      TestBed.configureTestingModule({declarations: [HeroComponent, VillianComponent, MainComponent]});
+      TestBed.configureTestingModule(
+          {declarations: [HeroComponent, VillianComponent, MainComponent]});
       const fixture = TestBed.createComponent(MainComponent);
-      expect(fixture.debugElement.nativeElement).toHaveText('I was saved by my hero from a villian.');
+      expect(fixture.debugElement.nativeElement)
+          .toHaveText('I was saved by my hero from a villian.');
     });
   });
 }

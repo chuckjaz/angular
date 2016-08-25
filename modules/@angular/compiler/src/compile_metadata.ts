@@ -109,7 +109,16 @@ export class CompileIdentifierMetadata implements CompileMetadataWithIdentifier 
 
   get runtimeCacheKey(): any { return this.identifier.runtime; }
 
-  get assetCacheKey(): any {
+  get assetCacheKey(): any { return this.getAssetCacheKey(); }
+
+  equalsTo(id2: CompileIdentifierMetadata): boolean {
+    var rk = this.runtimeCacheKey;
+    var ak = this.assetCacheKey;
+    return (isPresent(rk) && rk == id2.runtimeCacheKey) ||
+        (isPresent(ak) && ak == id2.assetCacheKey);
+  }
+
+  protected getAssetCacheKey(): any {
     if (this._assetCacheKey === UNDEFINED) {
       if (isPresent(this.moduleUrl) && isPresent(getUrlScheme(this.moduleUrl))) {
         var uri = reflector.importUri({'filePath': this.moduleUrl, 'name': this.name});
@@ -119,13 +128,6 @@ export class CompileIdentifierMetadata implements CompileMetadataWithIdentifier 
       }
     }
     return this._assetCacheKey;
-  }
-
-  equalsTo(id2: CompileIdentifierMetadata): boolean {
-    var rk = this.runtimeCacheKey;
-    var ak = this.assetCacheKey;
-    return (isPresent(rk) && rk == id2.runtimeCacheKey) ||
-        (isPresent(ak) && ak == id2.assetCacheKey);
   }
 }
 
@@ -305,24 +307,30 @@ export class CompileIdentifierMap<KEY extends CompileMetadataWithIdentifier, VAL
  */
 export class CompileTypeMetadata extends CompileIdentifierMetadata {
   isHost: boolean;
+  isPlaceholderUrl: boolean;
   diDeps: CompileDiDependencyMetadata[];
   lifecycleHooks: LifecycleHooks[];
 
-  constructor({runtime, name, moduleUrl, prefix, isHost, value, diDeps, lifecycleHooks}: {
-    runtime?: Type<any>,
-    name?: string,
-    moduleUrl?: string,
-    prefix?: string,
-    isHost?: boolean,
-    value?: any,
-    diDeps?: CompileDiDependencyMetadata[],
-    lifecycleHooks?: LifecycleHooks[];
-  } = {}) {
+  constructor(
+      {runtime, name, moduleUrl, isPlaceholderUrl, prefix, isHost, value, diDeps, lifecycleHooks}: {
+        runtime?: Type<any>,
+        name?: string,
+        moduleUrl?: string,
+        isPlaceholderUrl?: boolean,
+        prefix?: string,
+        isHost?: boolean,
+        value?: any,
+        diDeps?: CompileDiDependencyMetadata[],
+        lifecycleHooks?: LifecycleHooks[];
+      } = {}) {
     super({runtime: runtime, name: name, moduleUrl: moduleUrl, prefix: prefix, value: value});
     this.isHost = normalizeBool(isHost);
+    this.isPlaceholderUrl = normalizeBool(isPlaceholderUrl);
     this.diDeps = _normalizeArray(diDeps);
     this.lifecycleHooks = _normalizeArray(lifecycleHooks);
   }
+
+  get assetCacheKey(): any { return this.isPlaceholderUrl ? null : this.getAssetCacheKey(); }
 }
 
 export class CompileQueryMetadata {
