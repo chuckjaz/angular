@@ -8,7 +8,7 @@
 
 import {ViewType} from '../../core_private';
 import {CompiledAnimationTriggerResult} from '../animation/animation_compiler';
-import {CompileDirectiveMetadata, CompileIdentifierMap, CompileIdentifierMetadata, CompilePipeMetadata, CompileTokenMetadata} from '../compile_metadata';
+import {CompileDirectiveMetadata, CompileIdentifierMetadata, CompilePipeMetadata, CompileTokenMetadata} from '../compile_metadata';
 import {CompilerConfig} from '../config';
 import {ListWrapper} from '../facade/collection';
 import {isBlank, isPresent} from '../facade/lang';
@@ -27,7 +27,7 @@ import {createPureProxy, getPropertyInView, getViewFactoryName, injectFromViewPa
 
 export class CompileView implements NameResolver {
   public viewType: ViewType;
-  public viewQueries: CompileIdentifierMap<CompileTokenMetadata, CompileQuery[]>;
+  public viewQueries: Map<CompileTokenMetadata, CompileQuery[]>;
 
   public nodes: CompileNode[] = [];
   // root nodes or AppElements for ViewContainers
@@ -98,7 +98,7 @@ export class CompileView implements NameResolver {
     this.componentContext =
         getPropertyInView(o.THIS_EXPR.prop('context'), this, this.componentView);
 
-    var viewQueries = new CompileIdentifierMap<CompileTokenMetadata, CompileQuery[]>();
+    var viewQueries = new Map<CompileTokenMetadata, CompileQuery[]>();
     if (this.viewType === ViewType.COMPONENT) {
       var directiveInstance = o.THIS_EXPR.prop('context');
       ListWrapper.forEachWithIndex(this.component.viewQueries, (queryMeta, queryIndex) => {
@@ -191,7 +191,7 @@ export class CompileView implements NameResolver {
   }
 
   afterNodes() {
-    this.viewQueries.values().forEach(
+    this.viewQueries.forEach(
         (queries) => queries.forEach(
             (query) => query.afterChildren(this.createMethod, this.updateViewQueriesMethod)));
   }

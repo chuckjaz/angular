@@ -8,8 +8,8 @@
 
 import {BaseException} from '@angular/core';
 
-import {CompileDiDependencyMetadata, CompileDirectiveMetadata, CompileIdentifierMap, CompileIdentifierMetadata, CompileProviderMetadata, CompileQueryMetadata, CompileTokenMetadata} from '../compile_metadata';
-import {ListWrapper, StringMapWrapper} from '../facade/collection';
+import {CompileDiDependencyMetadata, CompileDirectiveMetadata, CompileIdentifierMetadata, CompileProviderMetadata, CompileQueryMetadata, CompileTokenMetadata} from '../compile_metadata';
+import {ListWrapper, MapWrapper, StringMapWrapper} from '../facade/collection';
 import {isBlank, isPresent} from '../facade/lang';
 import {Identifiers, identifierToken} from '../identifiers';
 import * as o from '../output/output_ast';
@@ -42,11 +42,11 @@ export class CompileElement extends CompileNode {
   public appElement: o.ReadPropExpr;
   public elementRef: o.Expression;
   public injector: o.Expression;
-  public instances = new CompileIdentifierMap<CompileTokenMetadata, o.Expression>();
-  private _resolvedProviders: CompileIdentifierMap<CompileTokenMetadata, ProviderAst>;
+  public instances = new Map<CompileTokenMetadata, o.Expression>();
+  private _resolvedProviders: Map<CompileTokenMetadata, ProviderAst>;
 
   private _queryCount = 0;
-  private _queries = new CompileIdentifierMap<CompileTokenMetadata, CompileQuery[]>();
+  private _queries = new Map<CompileTokenMetadata, CompileQuery[]>();
   private _componentConstructorViewQueryLists: o.Expression[] = [];
 
   public contentNodesByNgContentIndex: Array<o.Expression>[] = null;
@@ -64,10 +64,10 @@ export class CompileElement extends CompileNode {
     references.forEach(ref => this.referenceTokens[ref.name] = ref.value);
 
     this.elementRef = o.importExpr(Identifiers.ElementRef).instantiate([this.renderNode]);
-    this.instances.add(identifierToken(Identifiers.ElementRef), this.elementRef);
+    this.instances.set(identifierToken(Identifiers.ElementRef), this.elementRef);
     this.injector = o.THIS_EXPR.callMethod('injector', [o.literal(this.nodeIndex)]);
-    this.instances.add(identifierToken(Identifiers.Injector), this.injector);
-    this.instances.add(identifierToken(Identifiers.Renderer), o.THIS_EXPR.prop('renderer'));
+    this.instances.set(identifierToken(Identifiers.Injector), this.injector);
+    this.instances.set(identifierToken(Identifiers.Renderer), o.THIS_EXPR.prop('renderer'));
     if (this.hasViewContainer || this.hasEmbeddedView || isPresent(this.component)) {
       this._createAppElement();
     }
@@ -87,7 +87,7 @@ export class CompileElement extends CompileNode {
             .toStmt();
     this.view.createMethod.addStmt(statement);
     this.appElement = o.THIS_EXPR.prop(fieldName);
-    this.instances.add(identifierToken(Identifiers.AppElement), this.appElement);
+    this.instances.set(identifierToken(Identifiers.AppElement), this.appElement);
   }
 
   public createComponentFactoryResolver(entryComponents: CompileIdentifierMetadata[]) {
@@ -137,17 +137,17 @@ export class CompileElement extends CompileNode {
 
   beforeChildren(): void {
     if (this.hasViewContainer) {
-      this.instances.add(
+      this.instances.set(
           identifierToken(Identifiers.ViewContainerRef), this.appElement.prop('vcRef'));
     }
 
-    this._resolvedProviders = new CompileIdentifierMap<CompileTokenMetadata, ProviderAst>();
+    this._resolvedProviders = new Map<CompileTokenMetadata, ProviderAst>();
     this._resolvedProvidersArray.forEach(
-        provider => this._resolvedProviders.add(provider.token, provider));
+        provider => this._resolvedProviders.set(provider.token, provider));
 
     // create all the provider instances, some in the view constructor,
     // some as getters. We rely on the fact that they are already sorted topologically.
-    this._resolvedProviders.values().forEach((resolvedProvider) => {
+    this._resolvedProviders.forEach((resolvedProvider) => {
       var providerValueExpressions = resolvedProvider.providers.map((provider) => {
         if (isPresent(provider.useExisting)) {
           return this._getDependency(
@@ -170,7 +170,7 @@ export class CompileElement extends CompileNode {
       var instance = createProviderProperty(
           propName, resolvedProvider, providerValueExpressions, resolvedProvider.multiProvider,
           resolvedProvider.eager, this);
-      this.instances.add(resolvedProvider.token, instance);
+      this.instances.set(resolvedProvider.token, instance);
     });
 
     for (var i = 0; i < this._directives.length; i++) {
@@ -179,7 +179,7 @@ export class CompileElement extends CompileNode {
       directive.queries.forEach((queryMeta) => { this._addQuery(queryMeta, directiveInstance); });
     }
     var queriesWithReads: _QueryWithRead[] = [];
-    this._resolvedProviders.values().forEach((resolvedProvider) => {
+    this._resolvedProviders.forEach((resolvedProvider) => {
       var queriesForProvider = this._getQueriesFor(resolvedProvider.token);
       ListWrapper.addAll(
           queriesWithReads,
@@ -233,7 +233,7 @@ export class CompileElement extends CompileNode {
   }
 
   afterChildren(childNodeCount: number) {
-    this._resolvedProviders.values().forEach((resolvedProvider) => {
+    this._resolvedProviders.forEach((resolvedProvider) => {
       // Note: afterChildren is called after recursing into children.
       // This is good so that an injector match in an element that is closer to a requesting element
       // matches first.
@@ -248,7 +248,7 @@ export class CompileElement extends CompileNode {
           this.nodeIndex, providerChildNodeCount, resolvedProvider, providerExpr));
     });
 
-    this._queries.values().forEach(
+    this._queries.forEach(
         (queries) => queries.forEach(
             (query) =>
                 query.afterChildren(this.view.createMethod, this.view.updateContentQueriesMethod)));
@@ -264,7 +264,7 @@ export class CompileElement extends CompileNode {
   }
 
   getProviderTokens(): o.Expression[] {
-    return this._resolvedProviders.values().map(
+    return MapWrapper.values(this._resolvedProviders).map(
         (resolvedProvider) => createDiTokenExpression(resolvedProvider.token));
   }
 

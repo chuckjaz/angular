@@ -10,7 +10,8 @@ import {Injectable} from '@angular/core';
 
 import {LifecycleHooks} from '../core_private';
 
-import {CompileDiDependencyMetadata, CompileIdentifierMap, CompileIdentifierMetadata, CompileNgModuleMetadata, CompileProviderMetadata, CompileTokenMetadata} from './compile_metadata';
+import {CompileDiDependencyMetadata, CompileIdentifierMetadata, CompileNgModuleMetadata, CompileProviderMetadata, CompileTokenMetadata} from './compile_metadata';
+import {MapWrapper} from './facade/collection';
 import {isBlank, isPresent} from './facade/lang';
 import {Identifiers, identifierToken} from './identifiers';
 import * as o from './output/output_ast';
@@ -76,7 +77,7 @@ export class NgModuleCompiler {
 }
 
 class _InjectorBuilder {
-  private _instances = new CompileIdentifierMap<CompileTokenMetadata, o.Expression>();
+  private _instances = new Map<CompileTokenMetadata, o.Expression>();
   private _fields: o.ClassField[] = [];
   private _createStmts: o.Statement[] = [];
   private _destroyStmts: o.Statement[] = [];
@@ -98,11 +99,11 @@ class _InjectorBuilder {
     if (resolvedProvider.lifecycleHooks.indexOf(LifecycleHooks.OnDestroy) !== -1) {
       this._destroyStmts.push(instance.callMethod('ngOnDestroy', []).toStmt());
     }
-    this._instances.add(resolvedProvider.token, instance);
+    this._instances.set(resolvedProvider.token, instance);
   }
 
   build(): o.ClassStmt {
-    let getMethodStmts: o.Statement[] = this._instances.keys().map((token) => {
+    let getMethodStmts: o.Statement[] = MapWrapper.keys(this._instances).map((token) => {
       var providerExpr = this._instances.get(token);
       return new o.IfStmt(
           InjectMethodVars.token.identical(createDiTokenExpression(token)),

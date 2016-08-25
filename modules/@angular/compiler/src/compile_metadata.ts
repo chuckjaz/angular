@@ -254,53 +254,6 @@ export class CompileTokenMetadata implements CompileMetadataWithIdentifier {
 }
 
 /**
- * Note: We only need this in places where we need to support identifiers that
- * don't have a `runtime` value given by the `StaticReflector`. E.g. see the `identifiers`
- * file where we have some identifiers hard coded by name/module path.
- *
- * TODO(tbosch): Eventually, all of these places should go through the static reflector
- * as well, providing them with a valid `StaticSymbol` that is again a singleton.
- */
-export class CompileIdentifierMap<KEY extends CompileMetadataWithIdentifier, VALUE> {
-  private _valueMap = new Map<any, VALUE>();
-  private _values: VALUE[] = [];
-  private _tokens: KEY[] = [];
-
-  add(token: KEY, value: VALUE) {
-    var existing = this.get(token);
-    if (isPresent(existing)) {
-      throw new BaseException(
-          `Cannot overwrite in a CompileIdentifierMap! Token: ${token.identifier.name}`);
-    }
-    this._tokens.push(token);
-    this._values.push(value);
-    var rk = token.runtimeCacheKey;
-    if (isPresent(rk)) {
-      this._valueMap.set(rk, value);
-    }
-    var ak = token.assetCacheKey;
-    if (isPresent(ak)) {
-      this._valueMap.set(ak, value);
-    }
-  }
-  get(token: KEY): VALUE {
-    var rk = token.runtimeCacheKey;
-    var ak = token.assetCacheKey;
-    var result: VALUE;
-    if (isPresent(rk)) {
-      result = this._valueMap.get(rk);
-    }
-    if (isBlank(result) && isPresent(ak)) {
-      result = this._valueMap.get(ak);
-    }
-    return result;
-  }
-  keys(): KEY[] { return this._tokens; }
-  values(): VALUE[] { return this._values; }
-  get size(): number { return this._values.length; }
-}
-
-/**
  * Metadata regarding compilation of a type.
  */
 export class CompileTypeMetadata extends CompileIdentifierMetadata {
@@ -691,13 +644,15 @@ export class TransitiveCompileNgModuleMetadata {
 
 export function removeIdentifierDuplicates<T extends CompileMetadataWithIdentifier>(items: T[]):
     T[] {
-  const map = new CompileIdentifierMap<T, T>();
+  const set = new Set<T>();
+  const result: T[] = [];
   items.forEach((item) => {
-    if (!map.get(item)) {
-      map.add(item, item);
+    if (!set.has(item)) {
+      set.add(item);
+      result.push(item);
     }
   });
-  return map.keys();
+  return result;
 }
 
 function _normalizeArray(obj: any[]): any[] {
