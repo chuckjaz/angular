@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
-        "module": "commonjs",
+        "module": "es2015",
+        "moduleResolution": "node",
         "target": "es5",
         "lib": ["es6", "dom"],
         "noImplicitAny": true,
@@ -18,7 +19,7 @@
         "experimentalDecorators": true,
         "rootDir": ".",
         "sourceRoot": ".",
-        "outDir": "../../../dist/packages-dist/compiler-cli",
+        "outDir": "../../../dist/packages-dist/esm/compiler-cli",
         "declaration": true,
         "skipLibCheck": true
     },

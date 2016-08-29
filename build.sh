@@ -17,6 +17,7 @@ PACKAGES=(core
   upgrade
   router
   compiler-cli
+  language-service
   benchpress)
 BUILD_ALL=true
 BUNDLE=true
@@ -132,6 +133,11 @@ do
     $TSC -p ${SRCDIR}/tsconfig-testing.json
   fi
 
+  if [[ -e ${SRCDIR}/tsconfig-2015.json ]]; then
+    echo "======      COMPILING: ${TSC} -p ${SRCDIR}/tsconfig-2015.json"
+    ${TSC} -p ${SRCDIR}/tsconfig-2015.json
+  fi
+
   echo "======      TSC 1.8 d.ts compat for ${DESTDIR}   ====="
   # safely strips 'readonly' specifier from d.ts files to make them compatible with tsc 1.8
   if [ "$(uname)" == "Darwin" ]; then
@@ -161,8 +167,10 @@ do
       cat ${LICENSE_BANNER} > ${UMD_ES5_PATH}.tmp
       cat ${UMD_ES5_PATH} >> ${UMD_ES5_PATH}.tmp
       mv ${UMD_ES5_PATH}.tmp ${UMD_ES5_PATH}
-      $UGLIFYJS -c --screw-ie8 --comments -o ${UMD_ES5_MIN_PATH} ${UMD_ES5_PATH}
-
+      if [[ ${PACKAGE} != language-service ]]; then
+        echo "=====          Uglify ${PACKAGE} index"
+        $UGLIFYJS -c --screw-ie8 --comments -o ${UMD_ES5_MIN_PATH} ${UMD_ES5_PATH}
+      fi
 
       if [[ -e rollup-testing.config.js ]]; then
         echo "======         Rollup ${PACKAGE} testing"

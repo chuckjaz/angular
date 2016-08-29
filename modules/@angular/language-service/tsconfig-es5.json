@@ -1,0 +1,34 @@
+{
+  "angularCompilerOptions": {
+    "skipTemplateCodegen": true
+  },
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declaration": true,
+    "stripInternal": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "../../../dist/packages-dist/language-service/",
+    "paths": {
+      "@angular/core": ["../../../dist/packages-dist/core"],
+      "@angular/core/*": ["../../../dist/packages-dist/core/*"],
+      "@angular/compiler": ["../../../dist/packages-dist/compiler"],
+      "@angular/compiler/*": ["../../../dist/packages-dist/compiler/*"],
+      "@angular/compiler-cli": ["../../../dist/packages-dist/compiler-cli"],
+      "@angular/compiler-cli/*": ["../../../dist/packages-dist/compiler-cli/*"],
+      "@angular/tsc-wrapped": ["../../../dist/tools/@angular/tsc-wrapped"],
+      "@angular/tsc-wrapped/*": ["../../../dist/tools/@angular/tsc-wrapped/*"]
+    },
+    "rootDir": ".",
+    "sourceMap": true,
+    "inlineSources": true,
+    "lib": ["es6", "dom"],
+    "target": "es5"
+  },
+  "files": [
+    "index.ts",
+    "../../../node_modules/@types/node/index.d.ts"
+  ]
+}
