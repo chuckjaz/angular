@@ -364,10 +364,16 @@ class AstType implements ExpressionVisitor {
       callable: false,
       public: true,
       definition: undefined,
+      inputProperty: false,
+      openTypeParameter: false,
       members(): SymbolTable{return _this.scope;},
       signatures(): Signature[]{return [];},
       selectSignature(types): Signature | undefined{return undefined;},
-      indexed(argument): Symbol | undefined{return undefined;}
+      indexed(argument): Symbol | undefined{return undefined;},
+      typeArguments(){return undefined;},
+      genericType(){return  undefined;},
+      constituentTypes(){return undefined;},
+      superTypeOf(){return false;}
     };
   }
 

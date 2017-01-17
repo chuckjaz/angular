@@ -247,8 +247,29 @@ export interface Symbol {
    * The location of the definition of the symbol
    */
   readonly definition: Definition;
-  /**
 
+  /**
+   * Whether the type is an input property of the type.
+   */
+  readonly inputProperty: boolean;
+
+  /**
+   * Is open type parameter. If the type is an open type parameter then the
+   * type field is the type constraint for the type parameter.
+   */
+  readonly openTypeParameter: boolean;
+
+  /**
+   * Is a union type.
+   */
+  readonly unionType?: boolean;
+
+  /**
+   * Is an intersection type.
+   */
+  readonly intersectionType?: boolean;
+
+  /**
    * A table of the members of the symbol; that is, the members that can appear
    * after a `.` in an Angular expression.
    *
@@ -273,6 +294,31 @@ export interface Symbol {
    * If the symbol cannot be indexed, this method should return `undefined`.
    */
   indexed(argument: Symbol): Symbol /* | undefined */;
+
+  /**
+   * Return the type's type parameters if this symbol is a type symbol
+   * that has type parameters or undefined.
+   */
+  typeArguments(): Symbol[] /* | undefined */;
+
+  /**
+   * Return the generic type of a type symbol or undefined if the type is not
+   * an instance of a generic type.
+   */
+  genericType(): Symbol /* | undefined */;
+
+  /**
+   * Return the list of constituent types for an intersection or union type or
+   * undefined it it is not a union or intersection type.
+   */
+  constituentTypes(): Symbol[] /* | undefined */;
+
+  /**
+   * Returns true this type is a supertype of the given type. If the symbol
+   * is not a type or this is not a type return false. If type is `this`
+   * then return true.
+   */
+  superTypeOf(type: Symbol): boolean;
 }
 
 /**

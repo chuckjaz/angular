@@ -68,6 +68,16 @@ export class DummyHtmlParser extends HtmlParser {
   }
 }
 
+class SymbolCache<T> {
+  map: WeakMap<T, Symbol> = new WeakMap();
+  get(key: T): Symbol {
+    return this.map.get(key);
+  }
+  set(key: T, symbol: Symbol) {
+    this.map.set(key, symbol);
+  }
+}
+
 /**
  * Avoid loading resources in the language servcie by using a dummy loader.
  */
@@ -90,7 +100,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
   private _reflector: StaticReflector;
   private _reflectorHost: ReflectorHost;
   private _checker: ts.TypeChecker;
-  private _typeCache: Symbol[] = [];
+  private typeCache = new SymbolCache<ts.Type>();
   private context: string|undefined;
   private lastProgram: ts.Program|undefined;
   private modulesOutOfDate: boolean = true;
@@ -239,11 +249,26 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     if (this.modulesOutOfDate) {
       this.analyzedModules = null;
       this._reflector = null;
+      this.typeCache = new SymbolCache();
       this._staticSymbolResolver = null;
       this.templateReferences = null;
       this.fileToComponent = null;
       this.ensureAnalyzedModules();
       this.modulesOutOfDate = false;
+    }
+  }
+
+  getQueryForSource(fileName: string, node?: ts.Node): SymbolQuery | undefined {
+    const sourceFile = this.program.getSourceFile(fileName);
+    const contextNode = node || sourceFile;
+    if (sourceFile) {
+      const context: TypeContext = {node: contextNode, program: this.program, checker: this.checker, cache: this.typeCache};
+        return new TypeScriptSymbolQuery(context, sourceFile, () => {
+          const pipes = (this.service && this.service.getPipesAt(fileName, contextNode.getStart())) || [];
+          const checker = this.checker;
+          const program = this.program;
+          return new PipesTable(pipes, {node, program, checker, cache: this.typeCache});
+        });
     }
   }
 
@@ -267,7 +292,6 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
 
   private clearCaches() {
     this._checker = null;
-    this._typeCache = [];
     this._resolver = null;
     this.collectedErrors = null;
     this.modulesOutOfDate = true;
@@ -304,6 +328,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
     let queryCache: SymbolQuery|undefined = undefined;
     const t = this;
     if (declaration) {
+      const context: TypeContext = {node, program: t.program, checker: t.checker, cache: t.typeCache };
       return {
         version,
         source,
@@ -312,14 +337,12 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
         get members():
             SymbolTable{const checker = t.checker; const program = t.program;
                         const type = checker.getTypeAtLocation(declaration);
-                        return new TypeWrapper(type, {node, program, checker}).members();},
+                        return typeSymbolOf(type, context).members();},
         get query(): SymbolQuery{
           if (!queryCache) {
-            queryCache = new TypeScriptSymbolQuery(t.program, t.checker, sourceFile, () => {
+            queryCache = new TypeScriptSymbolQuery(context, sourceFile, () => {
               const pipes = t.service.getPipesAt(fileName, node.getStart());
-              const checker = t.checker;
-              const program = t.program;
-              return new PipesTable(pipes, {node, program, checker});
+              return new PipesTable(pipes, context);
             });
           } return queryCache;
         }
@@ -591,7 +614,7 @@ export class TypeScriptServiceHost implements LanguageServiceHost {
       default:
         throw new Error(`Internal error, unhandled literal kind ${kind}:${BuiltinType[kind]}`);
     }
-    return new TypeWrapper(type, context);
+    return typeSymbolOf(type, context);
   }
 }
 
@@ -599,8 +622,7 @@ class TypeScriptSymbolQuery implements SymbolQuery {
   private typeCache = new Map<BuiltinType, Symbol>();
   private pipesCache: SymbolTable;
 
-  constructor(
-      private program: ts.Program, private checker: ts.TypeChecker, private source: ts.SourceFile,
+  constructor(private context: TypeContext, private source: ts.SourceFile,
       private fetchPipes: () => SymbolTable) {}
 
   getTypeKind(symbol: Symbol): BuiltinType { return typeKindOf(this.getTsTypeOf(symbol)); }
@@ -609,10 +631,9 @@ class TypeScriptSymbolQuery implements SymbolQuery {
     // TODO: Replace with typeChecker API when available.
     let result = this.typeCache.get(kind);
     if (!result) {
-      const type = getBuiltinTypeFromTs(
-          kind, {checker: this.checker, node: this.source, program: this.program});
-      result =
-          new TypeWrapper(type, {program: this.program, checker: this.checker, node: this.source});
+      // TODO: Re-evaluate use of local cach here.
+      const type = getBuiltinTypeFromTs(kind, this.context);
+      result = typeSymbolOf(type, this.context);
       this.typeCache.set(kind, result);
     }
     return result;
@@ -620,7 +641,7 @@ class TypeScriptSymbolQuery implements SymbolQuery {
 
   getTypeUnion(...types: Symbol[]): Symbol {
     // TODO: Replace with typeChecker API when available
-    const checker = this.checker;
+    const checker = this.context.checker;
 
     // No API exists so the cheat is to just return the last type any if no types are given.
     return types.length ? types[types.length - 1] : this.getBuiltinType(BuiltinType.Any);
@@ -635,14 +656,20 @@ class TypeScriptSymbolQuery implements SymbolQuery {
     if (type instanceof TypeWrapper) {
       const elementType = getTypeParameterOf(type.tsType, 'Array');
       if (elementType) {
-        return new TypeWrapper(elementType, type.context);
+        return typeSymbolOf(elementType, type.context);
       }
     }
   }
 
-  getNonNullableType(symbol: Symbol): Symbol {
-    // TODO: Replace with typeChecker API when available;
-    return symbol;
+  getNonNullableType(type: Symbol): Symbol {
+    if (type instanceof TypeWrapper) {
+      const tsType = type.tsType;
+      const nonNullableType = this.context.checker.getNonNullableType(tsType);
+      if (tsType != nonNullableType) {
+        return typeSymbolOf(nonNullableType, this.context);
+      }
+    }
+    return type;
   }
 
   getPipes(): SymbolTable {
@@ -654,18 +681,17 @@ class TypeScriptSymbolQuery implements SymbolQuery {
   }
 
   getTemplateContext(type: StaticSymbol): SymbolTable {
-    const context: TypeContext = {node: this.source, program: this.program, checker: this.checker};
-    const typeSymbol = findClassSymbolInContext(type, context);
+    const typeSymbol = findClassSymbolInContext(type, this.context);
     if (typeSymbol) {
       const contextType = this.getTemplateRefContextType(typeSymbol);
-      if (contextType) return new SymbolWrapper(contextType, context).members();
+      if (contextType) return new SymbolWrapper(contextType, this.context).members();
     }
   }
 
   getTypeSymbol(type: StaticSymbol): Symbol {
-    const context: TypeContext = {node: this.source, program: this.program, checker: this.checker};
-    const typeSymbol = findClassSymbolInContext(type, context);
-    return new SymbolWrapper(typeSymbol, context);
+    const typeSymbol = findClassSymbolInContext(type, this.context);
+    if (typeSymbol)
+      return new SymbolWrapper(typeSymbol, this.context);
   }
 
   createSymbolTable(symbols: SymbolDeclaration[]): SymbolTable {
@@ -689,7 +715,7 @@ class TypeScriptSymbolQuery implements SymbolQuery {
     if (constructor) {
       const constructorDeclaration = constructor.declarations[0] as ts.ConstructorTypeNode;
       for (const parameter of constructorDeclaration.parameters) {
-        const type = this.checker.getTypeAtLocation(parameter.type);
+        const type = this.context.checker.getTypeAtLocation(parameter.type);
         if (type.symbol.name == 'TemplateRef' && isReferenceType(type)) {
           const typeReference = type as ts.TypeReference;
           if (typeReference.typeArguments.length === 1) {
@@ -720,6 +746,16 @@ interface TypeContext {
   node: ts.Node;
   program: ts.Program;
   checker: ts.TypeChecker;
+  cache: SymbolCache<ts.Type>;
+}
+
+function typeSymbolOf(type: ts.Type, context: TypeContext): Symbol {
+  let result = context.cache.get(type);
+  if (!result) {
+    result = new TypeWrapper(type, context);
+    context.cache.set(type, result);
+  }
+  return result;
 }
 
 function typeCallable(type: ts.Type): boolean {
@@ -768,7 +804,8 @@ class TypeWrapper implements Symbol {
 
   get name(): string {
     const symbol = this.tsType.symbol;
-    return (symbol && symbol.name) || '<anonymous>';
+    const intrinsicName = (this.tsType as any).intrinsicName;
+    return (symbol && symbol.name) || intrinsicName || '<anonymous>';
   }
 
   get kind(): CompletionKind { return 'type'; }
@@ -785,6 +822,20 @@ class TypeWrapper implements Symbol {
 
   get definition(): Definition { return definitionFromTsSymbol(this.tsType.getSymbol()); }
 
+  get inputProperty(): boolean { return false; }
+
+  get openTypeParameter(): boolean {
+    return (this.tsType.flags & ts.TypeFlags.TypeParameter) != 0;
+  }
+
+  get unionType(): boolean {
+    return (this.tsType.flags & ts.TypeFlags.Union) != 0;
+  }
+
+  get intersectionType(): boolean {
+    return (this.tsType.flags & ts.TypeFlags.Intersection) != 0;
+  }
+
   members(): SymbolTable {
     return new SymbolTableWrapper(this.tsType.getProperties(), this.context);
   }
@@ -796,6 +847,83 @@ class TypeWrapper implements Symbol {
   }
 
   indexed(argument: Symbol): Symbol|undefined { return undefined; }
+
+  typeArguments(): Symbol[] {
+    if ((this.tsType.flags & ts.TypeFlags.Reference) != 0) {
+      const args = (this.tsType as ts.TypeReference).typeArguments;
+      return args.map(p => typeSymbolOf(p, this.context));
+    }
+  }
+
+  genericType(): Symbol | undefined {
+    if ((this.tsType.flags & ts.TypeFlags.Reference) != 0) {
+      const target = (this.tsType as ts.TypeReference).target;
+      return typeSymbolOf(target, this.context);
+    }
+  }
+
+  constituentTypes(): Symbol[] | undefined {
+    if (this.unionType || this.intersectionType) {
+      const types = (this.tsType as ts.UnionOrIntersectionType).types;
+      return types.map(t => typeSymbolOf(t as ts.Type, this.context));
+    }
+  }
+
+  superTypeOf(type: Symbol): boolean {
+    if (type == this) return true;
+    if (type instanceof TypeWrapper) {
+
+      // TODO: Replace with a call to the checker once such a call exists.
+      let isSuperTypeOf: (a: ts.Type, b: ts.Type) => boolean = undefined as any;  // let rec pattern.
+      isSuperTypeOf = (a: ts.Type, b: ts.Type): boolean => {
+        // If a is a supertype of itself.
+        if (a == b) return true;
+
+        // a is a supertype of b if a is any.
+        if ((a.flags & ts.TypeFlags.Any) != 0) {
+          return true;
+        }
+
+        // a is a supertype of b if a is a supertype of a base type of b.
+        if ((a.flags & (ts.TypeFlags.ObjectType | ts.TypeFlags.Interface)) != 0) {
+          const baseTypes = b.getBaseTypes();
+          if (baseTypes && baseTypes.some(base => isSuperTypeOf(a, base))) return true;
+        }
+
+        // a is a supertype of b if a is a union type and one of the union types is a super type of b.
+        if ((a.flags & ts.TypeFlags.Union) != 0) {
+          const types = (a as ts.UnionType).types;
+          if (types.some(t => isSuperTypeOf(t, b))) return true;
+        }
+
+        // a is a supertype of b if b is an intersection type and a is a supertype to one of the intersected types of b.
+        if ((b.flags & ts.TypeFlags.Intersection) != 0) {
+          const types = (b as ts.IntersectionType).types;
+          if (types.some(t => isSuperTypeOf(a, t))) return true;
+        }
+
+        // a is a supertype of b if a and b are function types and each b's parameters are supertypes of a's and a's result type is a supertype of b's.
+        // TODO: Functions
+
+        // a is a supertype of b if a and b are object types and a has a subset of b's corresponding members.
+        // TODO: Matching
+
+        return false;
+      };
+
+      return isSuperTypeOf(this.tsType, type.tsType);
+    }
+
+    return false;
+  }
+}
+
+class TypeParameterWrapper extends TypeWrapper {
+  constructor (tsType: ts.TypeParameter, context: TypeContext) { super(tsType, context); }
+
+  get type(): Symbol|undefined { return typeSymbolOf((this.tsType as ts.TypeParameter).constraint, this.context); }
+
+  get openTypeParameter(): boolean { return true; }
 }
 
 class SymbolWrapper implements Symbol {
@@ -809,7 +937,7 @@ class SymbolWrapper implements Symbol {
 
   get language(): string { return 'typescript'; }
 
-  get type(): Symbol|undefined { return new TypeWrapper(this.tsType, this.context); }
+  get type(): Symbol|undefined { return typeSymbolOf(this.tsType, this.context); }
 
   get container(): Symbol|undefined { return getContainerOf(this.symbol, this.context); }
 
@@ -822,6 +950,13 @@ class SymbolWrapper implements Symbol {
 
   get definition(): Definition { return definitionFromTsSymbol(this.symbol); }
 
+  get inputProperty(): boolean {
+    // TODO: get input properties from Angular
+    return false;
+  }
+
+  get openTypeParameter() { return false; }
+
   members(): SymbolTable { return new SymbolTableWrapper(this.symbol.members, this.context); }
 
   signatures(): Signature[] { return signaturesOf(this.tsType, this.context); }
@@ -831,6 +966,14 @@ class SymbolWrapper implements Symbol {
   }
 
   indexed(argument: Symbol): Symbol|undefined { return undefined; }
+
+  typeArguments(): Symbol[] | undefined { return undefined; }
+
+  genericType(): Symbol | undefined { return undefined; }
+
+  constituentTypes(): Symbol[] | undefined { return undefined; }
+
+  superTypeOf(type: Symbol): boolean { return false; }
 
   private get tsType(): ts.Type {
     let type = this._tsType;
@@ -861,6 +1004,10 @@ class DeclaredSymbol implements Symbol {
 
   get definition(): Definition { return this.declaration.definition; }
 
+  get inputProperty(): boolean { return false;}
+
+  get openTypeParameter() { return false; }
+
   members(): SymbolTable { return this.declaration.type.members(); }
 
   signatures(): Signature[] { return this.declaration.type.signatures(); }
@@ -870,6 +1017,14 @@ class DeclaredSymbol implements Symbol {
   }
 
   indexed(argument: Symbol): Symbol|undefined { return undefined; }
+
+  typeArguments(): Symbol[] | undefined { return undefined; }
+
+  genericType(): Symbol | undefined { return undefined; }
+
+  constituentTypes(): Symbol[] | undefined { return undefined; }
+
+  superTypeOf(type: Symbol): boolean { return false; }
 }
 
 class SignatureWrapper implements Signature {
@@ -879,7 +1034,7 @@ class SignatureWrapper implements Signature {
     return new SymbolTableWrapper(this.signature.getParameters(), this.context);
   }
 
-  get result(): Symbol { return new TypeWrapper(this.signature.getReturnType(), this.context); }
+  get result(): Symbol { return typeSymbolOf(this.signature.getReturnType(), this.context); }
 }
 
 class SignatureResultOverride implements Signature {
@@ -977,7 +1132,7 @@ class PipeSymbol implements Symbol {
 
   get language(): string { return 'typescript'; }
 
-  get type(): Symbol|undefined { return new TypeWrapper(this.tsType, this.context); }
+  get type(): Symbol|undefined { return typeSymbolOf(this.tsType, this.context); }
 
   get container(): Symbol|undefined { return undefined; }
 
@@ -986,6 +1141,10 @@ class PipeSymbol implements Symbol {
   get public(): boolean { return true; }
 
   get definition(): Definition { return definitionFromTsSymbol(this.tsType.getSymbol()); }
+
+  get inputProperty(): boolean { return false;}
+
+  get openTypeParameter() { return false; }
 
   members(): SymbolTable { return EmptyTable.instance; }
 
@@ -1013,7 +1172,7 @@ class PipeSymbol implements Symbol {
         }
         if (resultType) {
           signature = new SignatureResultOverride(
-              signature, new TypeWrapper(resultType, parameterType.context));
+              signature, typeSymbolOf(resultType, parameterType.context));
         }
       }
     }
@@ -1021,6 +1180,14 @@ class PipeSymbol implements Symbol {
   }
 
   indexed(argument: Symbol): Symbol|undefined { return undefined; }
+
+  typeArguments(): Symbol[] | undefined { return undefined; }
+
+  genericType(): Symbol | undefined { return undefined; }
+
+  constituentTypes(): Symbol[] | undefined { return undefined; }
+
+  superTypeOf(type: Symbol): boolean { return false; }
 
   private get tsType(): ts.Type {
     let type = this._tsType;
@@ -1221,7 +1388,7 @@ function getContainerOf(symbol: ts.Symbol, context: TypeContext): Symbol {
       if (parent) {
         const type = context.checker.getTypeAtLocation(parent);
         if (type) {
-          return new TypeWrapper(type, context);
+          return typeSymbolOf(type, context);
         }
       }
     }

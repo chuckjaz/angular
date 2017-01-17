@@ -183,6 +183,14 @@ class OverrideKindSymbol implements Symbol {
 
   get definition(): Definition { return this.sym.definition; }
 
+  get openTypeParameter() { return this.sym.openTypeParameter; }
+
+  get inputProperty() { return this.sym.inputProperty; }
+
+  get unionType() { return !!this.sym.unionType; }
+
+  get intersectionType() { return !!this.sym.intersectionType; }
+
   members() { return this.sym.members(); }
 
   signatures() { return this.sym.signatures(); }
@@ -190,4 +198,12 @@ class OverrideKindSymbol implements Symbol {
   selectSignature(types: Symbol[]) { return this.sym.selectSignature(types); }
 
   indexed(argument: Symbol) { return this.sym.indexed(argument); }
+
+  typeArguments() { return this.sym.typeArguments(); }
+
+  genericType() { return this.sym.genericType(); }
+
+  constituentTypes() { return this.sym.constituentTypes(); }
+
+  superTypeOf(type: Symbol) { return this.sym.superTypeOf(type); }
 }
