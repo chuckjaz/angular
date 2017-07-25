@@ -23,20 +23,50 @@ export function runAsWorker(args: string[]) {
   return args.indexOf('--persistent_worker') !== -1;
 }
 
-const workerpb = (function loadWorkerPb() {
-  // This doesn't work due to a Bazel bug, see comments in build_defs.bzl
-  // let protoPath =
-  // 'external/bazel_tools/src/main/protobuf/worker_protocol.proto';
-  let protoPath = 'build_angular_rules_typescript/internal/worker_protocol.proto';
+const proto = `
+syntax = "proto3";
 
-  const protoNamespace = protobufjs.loadProtoFile({
-    // RUNFILES env includes the workspace_root, see
-    // internal/node_launcher.sh
-    root: process.env['RUNFILES'],
-    file: protoPath,
-  });
+package blaze.worker;
+
+option java_package = "com.google.devtools.build.lib.worker";
+
+// An input file.
+message Input {
+  // The path in the file system where to read this input artifact from. This is
+  // either a path relative to the execution root (the worker process is
+  // launched with the working directory set to the execution root), or an
+  // absolute path.
+  string path = 1;
+
+  // A hash-value of the contents. The format of the contents is unspecified and
+  // the digest should be treated as an opaque token.
+  bytes digest = 2;
+}
+
+// This represents a single work unit that Bazel sends to the worker.
+message WorkRequest {
+  repeated string arguments = 1;
+
+  // The inputs that the worker is allowed to read during execution of this
+  // request.
+  repeated Input inputs = 2;
+}
+
+// The worker sends this message to Bazel when it finished its work on the
+// WorkRequest message.
+message WorkResponse {
+  int32 exit_code = 1;
+
+  // This is printed to the user after the WorkResponse has been received and is supposed to contain
+  // compiler warnings / errors etc. - thus we'll use a string type here, which gives us UTF-8
+  // encoding.
+  string output = 2;
+}`;
+
+const workerpb = (function loadWorkerPb() {
+  const protoNamespace = protobufjs.loadProto(proto, 'worker_protocol.proto');
   if (!protoNamespace) {
-    throw new Error('Cannot find ' + path.resolve(protoPath));
+    throw new Error('Cannot find parse proto');
   }
   return protoNamespace.build('blaze.worker');
 })();
