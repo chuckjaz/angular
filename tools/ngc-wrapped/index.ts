@@ -11,14 +11,17 @@
 import 'reflect-metadata';
 import {ngc} from '@angular/compiler-cli';
 import * as fs from 'fs';
+import * as ts from 'typescript';
+
 // Note, the tsc_wrapped module comes from rules_typescript, not from @angular/tsc-wrapped
-import {parseTsconfig} from 'tsc_wrapped';
+import {parseTsconfig, CompilerHost, UncachedFileLoader} from 'tsc_wrapped';
 
 function main(args: string[]) {
   const [{options, bazelOpts, files, config}] = parseTsconfig(args[1]);
   const ngOptions: {expectedOut: string[]} = (config as any).angularCompilerOptions;
 
-  const result = ngc(args, undefined, files, options, ngOptions);
+  const compilerHost = new CompilerHost(files, options, bazelOpts, ts.createCompilerHost(options), new UncachedFileLoader());
+  const result = ngc(args, undefined, files, options, ngOptions, compilerHost);
 
   if (result === 0) {
     // Ensure that expected output files exist.

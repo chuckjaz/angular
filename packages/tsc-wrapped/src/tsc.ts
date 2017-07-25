@@ -65,7 +65,7 @@ export function formatDiagnostics(diags: ts.Diagnostic[]): string {
   return diags
       .map((d) => {
         let res = ts.DiagnosticCategory[d.category];
-        if (d.file) {
+        if (d.file && d.start) {
           res += ' at ' + d.file.fileName + ':';
           const {line, character} = d.file.getLineAndCharacterOfPosition(d.start);
           res += (line + 1) + ':' + (character + 1) + ':';

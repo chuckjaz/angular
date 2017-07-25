@@ -25,7 +25,7 @@ export function main(args) {
 // The one FileCache instance used in this process.
 const fileCache = new FileCache<ts.SourceFile>(debug);
 
-class CompilerHost implements ts.CompilerHost {
+export class CompilerHost implements ts.CompilerHost {
 
   /**
    * Lookup table to answer file stat's without looking on disk.
@@ -178,7 +178,7 @@ class CompilerHost implements ts.CompilerHost {
 
 function format(target: string, diagnostics: ts.Diagnostic[]): string {
   const diagnosticsHost: ts.FormatDiagnosticsHost = {
-    ...ts.sys,
+    getCurrentDirectory: () => ts.sys.getCurrentDirectory(),
     getNewLine: () => ts.sys.newLine,
     getCanonicalFileName: (f: string) =>
         ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase()

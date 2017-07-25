@@ -124,7 +124,7 @@ function getProjectDirectory(project: string): string {
 
 export function main(
     args: string[], consoleError: (s: string) => void = console.error, files?: string[],
-    options?: ts.CompilerOptions, ngOptions?: any): number {
+    options?: ts.CompilerOptions, ngOptions?: any, compilerHost?: ts.CompilerHost): number {
   try {
     const parsedArgs = require('minimist')(args);
     const project = parsedArgs.p || parsedArgs.project || '.';
@@ -145,7 +145,7 @@ export function main(
     ngOptions.basePath = basePath;
     ngOptions.genDir = basePath;
 
-    let host = ts.createCompilerHost(options, true);
+    let host = compilerHost || ts.createCompilerHost(options, true);
     host.realpath = p => p;
 
     const rootFileNames = files.map(f => path.normalize(f));
