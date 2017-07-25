@@ -1,4 +1,4 @@
-load("@build_bazel_rules_typescript//:defs.bzl", "ts_library", "nodejs_binary")
+load("@io_angular_rules_typescript//:defs.bzl", "ts_library", "nodejs_binary")
 
 licenses(["notice"])  # Apache 2.0
 
@@ -7,7 +7,7 @@ ts_library(
     srcs = ["index.ts"],
     deps = [
         "//packages/compiler-cli",
-        "@build_bazel_rules_typescript//internal/tsc_wrapped"
+        "@io_angular_rules_typescript//internal/tsc_wrapped"
     ],
 )
 
