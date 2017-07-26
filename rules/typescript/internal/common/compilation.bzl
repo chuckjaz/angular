@@ -35,6 +35,7 @@ COMMON_ATTRIBUTES = dict(BASE_ATTRIBUTES, **{
     # Used to determine module mappings
     "module_name": attr.string(),
     "module_root": attr.string(),
+    "module": attr.string(default = "commonjs"),
     # TODO(radokirov): remove this attr when clutz is stable enough to consume
     # any closure JS code.
     "runtime_deps": attr.label_list(

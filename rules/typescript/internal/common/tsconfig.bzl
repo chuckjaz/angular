@@ -117,8 +117,8 @@ def create_tsconfig(ctx, files, srcs,
       # and builds are faster with the setting on.
       "skipDefaultLibCheck": True,
 
-      # Always produce commonjs modules (might get translated to goog.module).
-      "module": "commonjs",
+      # TODO(chuckj): discuss with alexeagle the right way to do this.
+      "module": ctx.attr.module,
       "moduleResolution": "node",
 
       "outDir": "/".join([workspace_path, outdir_path]),

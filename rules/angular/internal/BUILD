@@ -13,3 +13,11 @@
 # limitations under the License.
 
 licenses(["notice"])  # Apache 2.0
+
+load("@io_angular_rules_typescript//:defs.bzl", "nodejs_binary")
+
+nodejs_binary(
+    name = "rollup",
+    entry_point = "rollup/bin/rollup",
+    visibility = ["//visibility:public"],
+)

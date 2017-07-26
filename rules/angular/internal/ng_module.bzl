@@ -56,9 +56,6 @@ def _ngc_tsconfig(ctx, files, srcs, **kwargs):
   config = tsc_wrapped_tsconfig(ctx, files, srcs, **kwargs)
   if ctx.attr.flat_module:
     workspace_path = config["compilerOptions"]["rootDir"]
-    # Override the target and module to be ES2015
-    config["compilerOptions"]["target"] = "es2015"
-    config["compilerOptions"]["module"] = "es2015"
     return dict(config, **{
       "angularCompilerOptions": {
           "expectedOut": [],
