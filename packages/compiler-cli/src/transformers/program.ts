@@ -220,10 +220,7 @@ class AngularCompilerProgram implements Program {
 
   private generateFiles() {
     try {
-      // Always generate the files if requested to ensure we capture any diagnostic errors but only
-      // keep the results if we are not skipping template code generation.
-      const result = this.compiler.emitAllImpls(this.analyzedModules);
-      return this.options.skipTemplateCodegen ? [] : result;
+      return this.options.skipTemplateCodegen ? [] : this.compiler.emitAllImpls(this.analyzedModules);
     } catch (e) {
       if (isSyntaxError(e)) {
         this._generatedFileDiagnostics = [{message: e.message, category: DiagnosticCategory.Error}];

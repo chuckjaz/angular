@@ -7,7 +7,7 @@
  */
 'use strict';
 var path = require('path');
-
+Error.stackTraceLimit = Infinity;
 /**
  * The module roots as pairs of a RegExp to match the require path, and a
  * module_root to substitute for the require path.

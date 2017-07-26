@@ -1,7 +1,7 @@
 package(default_visibility=["//visibility:public"])
-load("@io_angular_rules_typescript//:defs.bzl", "ts_library")
+load("@io_angular_rules_angular//:defs.bzl", "ng_module")
 
-ts_library(
+ng_module(
     name = "common",
     srcs = glob(["**/*.ts"], exclude=[
       "http/**",
@@ -9,6 +9,9 @@ ts_library(
       "testing/**",
     ]),
     module_name = "@angular/common",
+    flat_module = True,
+    flat_module_index = ":public_api.ts",
     deps = ["//packages/core"],
     tsconfig = ":tsconfig-build.json",
+    compiler = "//tools/ngc-wrapped"
 )

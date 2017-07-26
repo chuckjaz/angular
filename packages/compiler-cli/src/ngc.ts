@@ -122,6 +122,12 @@ function getProjectDirectory(project: string): string {
   return isFile ? path.dirname(project) : project;
 }
 
+function normalizeNames(names: string[] | undefined, basePath: string): string[] | undefined {
+  if (names) {
+    return names.map(n => path.normalize(path.join(basePath, n)));
+  }
+}
+
 export function main(
     args: string[], consoleError: (s: string) => void = console.error, files?: string[],
     options?: ts.CompilerOptions, ngOptions?: any, compilerHost?: ts.CompilerHost): number {
@@ -158,8 +164,9 @@ export function main(
         }
 
     if (ngOptions.flatModuleOutFile && !ngOptions.skipMetadataEmit) {
+      const indexNames = normalizeNames(ngOptions.flatModuleIndex, basePath) || rootFileNames;
       const {host: bundleHost, indexName, errors} =
-          createBundleIndexHost(ngOptions, rootFileNames, host);
+          createBundleIndexHost(ngOptions, indexNames, host);
       if (errors) check(basePath, errors);
       if (indexName) addGeneratedFileName(indexName);
       host = bundleHost;
@@ -178,10 +185,11 @@ export function main(
     check(basePath, ngProgram.getTsSyntacticDiagnostics());
 
     // Check TypeScript semantic and Angular structure diagnostics
-    check(basePath, ngProgram.getTsSemanticDiagnostics(), ngProgram.getNgStructuralDiagnostics());
+    check(basePath, ngProgram.getTsSemanticDiagnostics(), ngOptions.skipTemplateCodegen ? [] : ngProgram.getNgStructuralDiagnostics());
 
     // Check Angular semantic diagnostics
-    check(basePath, ngProgram.getNgSemanticDiagnostics());
+    if (!ngOptions.skipTemplateCodegen)
+      check(basePath, ngProgram.getNgSemanticDiagnostics());
 
     ngProgram.emit({
       emitFlags: api.EmitFlags.Default |

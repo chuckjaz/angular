@@ -28,15 +28,28 @@ export function formatDiagnostics(d: ts.Diagnostic[]): string {
  * Useful for partial implementations to override only methods they care about.
  */
 export abstract class DelegatingHost implements ts.CompilerHost {
-  constructor(protected delegate: ts.CompilerHost) {}
+  constructor(protected delegate: ts.CompilerHost) {
+    if (delegate.directoryExists) {
+      this.directoryExists = (directoryName: string) => delegate.directoryExists!(directoryName);
+    }
+    if (delegate.getCancellationToken) {
+      this.getCancellationToken = () => delegate.getCancellationToken!();
+    }
+    if (delegate.getDefaultLibLocation) {
+      this.getDefaultLibLocation = () => delegate.getDefaultLibLocation!();
+    }
+    if (delegate.trace) {
+      this.trace = (s: string) => delegate.trace!(s);
+    }
+  }
   getSourceFile =
       (fileName: string, languageVersion: ts.ScriptTarget, onError?: (message: string) => void) =>
           this.delegate.getSourceFile(fileName, languageVersion, onError);
 
-  getCancellationToken = () => this.delegate.getCancellationToken !();
+  getCancellationToken?: () => ts.CancellationToken;
   getDefaultLibFileName = (options: ts.CompilerOptions) =>
       this.delegate.getDefaultLibFileName(options);
-  getDefaultLibLocation = () => this.delegate.getDefaultLibLocation !();
+  getDefaultLibLocation:  () => string;
   writeFile: ts.WriteFileCallback = this.delegate.writeFile;
   getCurrentDirectory = () => this.delegate.getCurrentDirectory();
   getDirectories = (path: string): string[] =>
@@ -46,8 +59,8 @@ export abstract class DelegatingHost implements ts.CompilerHost {
   getNewLine = () => this.delegate.getNewLine();
   fileExists = (fileName: string) => this.delegate.fileExists(fileName);
   readFile = (fileName: string) => this.delegate.readFile(fileName);
-  trace = (s: string) => this.delegate.trace !(s);
-  directoryExists = (directoryName: string) => this.delegate.directoryExists !(directoryName);
+  trace?: (s: string) => void;
+  directoryExists?:  (directoryName: string) => boolean;
 }
 
 const IGNORED_FILES = /\.ngfactory\.js$|\.ngstyle\.js$/;
