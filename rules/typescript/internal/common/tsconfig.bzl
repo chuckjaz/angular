@@ -18,7 +18,7 @@ _DEBUG = False
 
 load(":common/module_mappings.bzl", "get_module_mappings")
 
-def create_tsconfig(ctx, files, srcs,
+def create_tsconfig(ctx, files, srcs, target, module, suffix=None,
                     devmode_manifest=None, tsickle_externs=None, type_blacklisted_declarations=[],
                     out_dir=None, disable_strict_deps=False, allowed_deps=set(),
                     extra_root_dirs=[], module_path_prefixes=None, module_roots=None):
@@ -28,7 +28,14 @@ def create_tsconfig(ctx, files, srcs,
         ctx: the skylark execution context
         files: Labels of all TypeScript compiler inputs
         srcs: Immediate sources being compiled, as opposed to transitive deps.
-        devmode_manifest: path to the manifest file to write for --target=es5
+        target: The JavaScript version for which to produce output. More advanced
+            constructs such as, class, enums, and generators, will be down-leveled
+            if the target does not support the construct.
+            One of "ES5", "ES2015", "ES2016", "ES2017", or "ESNEXT"
+        module: The module format to target.
+            One of "commonjs", "amd", "system", "umd" or "es2015".
+        suffix: A suffix to insert prior to .js or _local.js.
+        devmode_manifest: path to the manifest file
         tsickle_externs: path to write tsickle-generated externs.js.
         type_blacklisted_declarations: types declared in these files will never be
             mentioned in generated .d.ts.
@@ -87,6 +94,7 @@ def create_tsconfig(ctx, files, srcs,
   bazel_options = {
       "target": str(ctx.label),
       "tsickle": tsickle_externs != None,
+      "suffix": suffix if suffex else "",
       "tsickleGenerateExterns": getattr(ctx.attr, "generate_externs", True),
       "tsickleExternsPath": tsickle_externs.path if tsickle_externs else "",
       "untyped": not getattr(ctx.attr, "tsickle_typed", False),
@@ -108,7 +116,7 @@ def create_tsconfig(ctx, files, srcs,
   # Keep these options in sync with those in playground/playground.ts.
   compiler_options = {
       # De-sugar to this language level
-      "target": "es5" if devmode_manifest or ctx.attr.runtime == "nodejs" else "es6",
+      "target": target,
       # Has no effect in closure/ES2015 mode. Always true just for simplicity.
       "downlevelIteration": True,
 
@@ -117,8 +125,7 @@ def create_tsconfig(ctx, files, srcs,
       # and builds are faster with the setting on.
       "skipDefaultLibCheck": True,
 
-      # TODO(chuckj): discuss with alexeagle the right way to do this.
-      "module": ctx.attr.module,
+      "module": module,
       "moduleResolution": "node",
 
       "outDir": "/".join([workspace_path, outdir_path]),

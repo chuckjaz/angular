@@ -25,46 +25,40 @@ load("@io_angular_rules_typescript//internal:common/json_marshal.bzl", "json_mar
 # in the library. Most of these will be produced as empty files but it is
 # unknown, without parsing, which will be empty.
 def _expected_outs(ctx):
-  if ctx.attr.flat_module:
-    # Flat modules only produce the bundle index.js and the index.metadata.json files
-    outfile = ctx.new_file(ctx.bin_dir, ctx.attr.flat_module_outfile)
-    metadata_file = ctx.new_file(ctx.bin_dir, outfile.basename[:-3] + '.metadata.json')
-    result = [outfile, metadata_file]
-  else:
-    result = []
-    for src in ctx.files.srcs:
-      if src.short_path.endswith(".ts"):
-        basename = src.short_path[len(ctx.label.package) + 1:-3]
-        result += [ctx.new_file(ctx.bin_dir, basename + ext) for ext in [
-          ".ngfactory.js",
-          ".ngfactory.d.ts",
-          ".ngsummary.js",
-          ".ngsummary.d.ts",
-          ".ngsummary.json",
-        ]]
-      elif src.short_path.endswith(".css"):
-        basename = src.short_path[len(ctx.label.package) + 1:-4]
-        result += [ctx.new_file(ctx.bin_dir, basename + ext) for ext in [
-          ".css.shim.ngstyle.js",
-          ".css.shim.ngstyle.d.ts",
-          ".css.ngstyle.js",
-          ".css.ngstyle.d.ts",
-        ]]
+  result = []
+  for src in ctx.files.srcs:
+    if src.short_path.endswith(".ts"):
+      basename = src.short_path[len(ctx.label.package) + 1:-3]
+      result += [ctx.new_file(ctx.bin_dir, basename + ext) for ext in [
+        ".ngfactory.js",
+        ".ngfactory.d.ts",
+        ".ngsummary.js",
+        ".ngsummary.d.ts",
+        ".ngsummary.json",
+      ]]
+    elif src.short_path.endswith(".css"):
+      basename = src.short_path[len(ctx.label.package) + 1:-4]
+      result += [ctx.new_file(ctx.bin_dir, basename + ext) for ext in [
+        ".css.shim.ngstyle.js",
+        ".css.shim.ngstyle.d.ts",
+        ".css.ngstyle.js",
+        ".css.ngstyle.d.ts",
+      ]]
   return result
 
 def _ngc_tsconfig(ctx, files, srcs, **kwargs):
   config = tsc_wrapped_tsconfig(ctx, files, srcs, **kwargs)
-  if ctx.attr.flat_module:
-    workspace_path = config["compilerOptions"]["rootDir"]
-    return dict(config, **{
-      "angularCompilerOptions": {
-          "expectedOut": [],
-          "skipTemplateCodegen": True,
-          "flatModuleId": ctx.attr.module_name,
-          "flatModuleIndex": [workspace_path + "/" + src.path for src in ctx.attr.flat_module_index.files],
-          "flatModuleOutFile": ctx.attr.flat_module_outfile
-     }
-  })
+  # if ctx.attr.flat_module:
+  #   workspace_path = config["compilerOptions"]["rootDir"]
+  #   return dict(config, **{
+  #     "angularCompilerOptions": {
+  #         "expectedOut": [],
+  #         "skipTemplateCodegen": True,
+  #         "flatModuleId": ctx.attr.module_name,
+  #         "flatModuleIndex": [workspace_path + "/" + src.path for src in ctx.attr.flat_module_index.files],
+  #         "flatModuleOutFile": ctx.attr.flat_module_outfile
+  #    }
+  # })
   return dict(config, **{
       "angularCompilerOptions": {
           "expectedOut": [o.path for o in _expected_outs(ctx)],
@@ -162,11 +156,6 @@ ng_module = rule(
         # since we want to compile @angular/core with ngc, but ngc depends on
         # @angular/core typescript output.
         "write_ng_outputs_only": attr.bool(default = False),
-        "flat_module": attr.bool(default = False),
-        "flat_module_index": attr.label(
-          allow_single_file=True
-        ),
-        "flat_module_outfile": attr.string(default = "index.js"),
         "tsconfig": attr.label(allow_files = True, single_file = True),
         "no_i18n": attr.bool(default = False),
         # TODO(alexeagle): enable workers for ngc

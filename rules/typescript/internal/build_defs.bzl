@@ -69,6 +69,9 @@ def _devmode_compile_action(ctx, inputs, outputs, config_file_path):
 def tsc_wrapped_tsconfig(ctx,
                          files,
                          srcs,
+                         target,
+                         module,
+                         suffix,
                          devmode_manifest=None,
                          tsickle_externs=None,
                          type_blacklisted_declarations=[],
@@ -84,7 +87,7 @@ def tsc_wrapped_tsconfig(ctx,
   # bazel-foo/ and therefore we need to strip some parent directories for each
   # f.path.
 
-  config = create_tsconfig(ctx, files, srcs,
+  config = create_tsconfig(ctx, files, srcs, target, module, suffix,
                            devmode_manifest=devmode_manifest,
                            **kwargs)
   config["bazelOptions"]["nodeModulesPrefix"] = "node_modules"
