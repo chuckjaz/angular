@@ -15,4 +15,4 @@
 ClosureES2015Output = provider()
 ESMES2015Output = provider()
 ESMES2016Output = provider()
-CommonJSEs5Output = provider()
+CommonJSES5Output = provider()

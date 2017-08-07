@@ -17,7 +17,7 @@
 
 load(":common/module_mappings.bzl", "module_mappings_aspect")
 load(":common/json_marshal.bzl", "json_marshal")
-load("@io_angular_rules_javascript//:defs.bzl", "ClosureES2015Output", "ESMES2015Output", "ESMES2016Output", "CommonJSEs5Output")
+load("@io_angular_rules_javascript//:defs.bzl", "ClosureES2015Output", "ESMES2015Output", "ESMES2016Output", "CommonJSES5Output")
 
 BASE_ATTRIBUTES = dict()
 
@@ -74,7 +74,7 @@ EMIT_OPTIONS = dict({
     suffix = "umd",
     dev_mode = True,
   ),
-  CommonJSEs5Output: struct(
+  CommonJSES5Output: struct(
     name = "common",
     module = "commonjs",
     target = "ES5",
@@ -85,7 +85,7 @@ EMIT_OPTIONS = dict({
 def _dev_mode(options):
   return hasattr(options, "dev_mode") and options.dev_mode
 
-SUPPORTED_OUTPUTS = [ClosureES2015Output, ESMES2015Output, ESMES2016Output, CommonJSEs5Output]
+SUPPORTED_OUTPUTS = [ClosureES2015Output, ESMES2015Output, ESMES2016Output, CommonJSES5Output]
 
 # TODO(plf): Enforce this at analysis time.
 def assert_js_or_typescript_deps(ctx):
@@ -255,7 +255,7 @@ def compile_ts(ctx,
 
   if is_library:
     es6_sources = set(outputs[ClosureES2015Output] + tsickle_externs)
-    es5_sources = set(outputs[CommonJSEs5Output])
+    es5_sources = set(outputs[CommonJSES5Output])
   else:
     es6_sources = set(tsickle_externs)
     es5_sources = set(tsickle_externs)
@@ -299,7 +299,7 @@ def compile_ts(ctx,
           "declarations": declarations, # Deprecated. Use ypescriptDeclarations provider instead
           "transitive_declarations": transitive_decls, # Deprecated. Use TransitiveTypescriptDeclarations provider instead
           "es6_sources": es6_sources, # Deprecated. Use ClosureES2015Output provider instead
-          "es5_sources": es5_sources, # Deprecated. Use CommonJSEs5Output provider instead
+          "es5_sources": es5_sources, # Deprecated. Use CommonJSES5Output provider instead
           "devmode_manifest": devmode_manifest,
           "type_blacklisted_declarations": type_blacklisted_declarations,
           "tsickle_externs": tsickle_externs,
