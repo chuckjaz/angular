@@ -17,14 +17,16 @@
 load(":executables.bzl", "get_node")
 load(":common/module_mappings.bzl", "module_mappings_runtime_aspect")
 
+load("@io_angular_rules_javascript//:defs.bzl", "CommonJSES5Output")
+
 def _sources_aspect_impl(target, ctx):
   result = set()
   if hasattr(ctx.rule.attr, "deps"):
     for dep in ctx.rule.attr.deps:
       if hasattr(dep, "node_sources"):
         result += dep.node_sources
-  if hasattr(target, "typescript"):
-    result += target.typescript.es5_sources
+  if CommonJSES5Output in target:
+      result += target[CommonJSES5Output].files
   return struct(node_sources = result)
 
 _sources_aspect = aspect(
@@ -59,7 +61,7 @@ def _nodejs_binary_impl(ctx):
     node_modules = ctx.files._node_modules
     sources = set()
     for d in ctx.attr.data:
-      if hasattr(d, "node_sources"):
+      if  hasattr(d, "node_sources"):
         sources += d.node_sources
 
     _write_loader_script(ctx)
