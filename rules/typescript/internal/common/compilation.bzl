@@ -85,6 +85,9 @@ EMIT_OPTIONS = dict({
   )
 })
 
+def _dev_mode(options):
+  return hasattr(options, "dev_mode") and options.dev_mode
+
 SUPPORTED_OUTPUTS = [JsOutputEsmEs2015, JsOutputEsmEs5, JsOutputUmdEs5, JsOutputCommonJsEs5]
 
 # TODO(plf): Enforce this at analysis time.
@@ -130,8 +133,9 @@ def _output_basename(ctx, label, input_file):
   dot = basename.rfind(".")
   return basename[:dot]
 
-def _enter_output(outputs, output, basename, suffix):
-  outputs[output] = outputs[output] + [basename + suffix] if input in outputs else [basename + suffix]
+def _enter_output(ctx, outputs, output, basename, suffix):
+  file = ctx.new_file(basename + suffix)
+  outputs[output] = outputs[output] + [file] if output in outputs else [file]
 
 def compile_ts(ctx,
                is_library,
@@ -188,12 +192,13 @@ def compile_ts(ctx,
       output_basename = _output_basename(ctx, src.label, f)
       for output in SUPPORTED_OUTPUTS:
         suffix = EMIT_OPTIONS[output].suffix
-        _enter_output(outputs, output_basename, suffix)
-      _enter_output(outputs, JsOutputTypeScriptDeclarations, basename, ".d.ts")
-      
-  if has_sources and ctx.attr.runtime != "nodejs":
-    # Note: setting this variable controls whether tsickle is run at all.
-    tsickle_externs = [ctx.new_file(ctx.label.name + ".externs.js")]
+        _enter_output(ctx, outputs, output, output_basename, suffix)
+      _enter_output(ctx, outputs, JsOutputTypeScriptDeclarations, output_basename, ".d.ts")
+  
+  # TODO(chuckj): Re-enabled production of .extern.js 
+  # if has_sources and ctx.attr.runtime != "nodejs":
+  #   # Note: setting this variable controls whether tsickle is run at all.
+  #   tsickle_externs = [ctx.new_file(ctx.label.name + ".externs.js")]
 
   transitive_dts = _collect_transitive_dts(ctx)
   input_declarations = transitive_dts.transitive_declarations + src_declarations
@@ -203,7 +208,7 @@ def compile_ts(ctx,
 
   # A manifest listing the order of this rule's *.ts files (non-transitive)
   # Only generated if the rule has any sources.
-  devmode_manifest = None
+  devmode_manifest = ctx.new_file(ctx.label.name + ".es5.MF")
 
   if has_sources:
     compilation_inputs = input_declarations + extra_dts_files + srcs
@@ -227,20 +232,21 @@ def compile_ts(ctx,
         srcs,
         options.target,
         options.module,
-        options.suffix
+        options.suffix,
         jsx_factory=jsx_factory,
-        devmode_manifest=devmode_manifest.path if options.dev_mode else None,
-        tsickle_externs=tskick_externs_path,
+        devmode_manifest=devmode_manifest.path if _dev_mode(options) else None,
+        tsickle_externs=tsickle_externs_path,
         type_blacklisted_declarations=type_blacklisted_declarations,
         allowed_deps=allowed_deps)
 
       # Produce the output .d.ts files when producing the dev_mode output
       # This reduces the number of actions necessary for development turn-around
-      if not options.dev_mode:
+      if not _dev_mode(options):
         tsconfig["compilerOptions"]["declaration"] = False
+      ctx.file_action(output=tsconfig_json, content=json_marshal(tsconfig))
       
       action_inputs = compilation_inputs + [tsconfig_json]
-      action_outputs = outputs[output] + ((outputs[JsOutputTypeScriptDeclarations] + [devmode_manifest]) if options.dev_mode else [])
+      action_outputs = outputs[output] + ((outputs[JsOutputTypeScriptDeclarations] + [devmode_manifest]) if _dev_mode(options) else [])
       compile_action(ctx, action_inputs, action_outputs, tsconfig_json.path)
 
   gen_declarations = outputs[JsOutputTypeScriptDeclarations] if JsOutputTypeScriptDeclarations in outputs else []
@@ -276,8 +282,9 @@ def compile_ts(ctx,
   if not is_library:
     files += set(tsickle_externs)
 
-  providers = [output(files = outputs[output]) for output in (SUPPORTED_OUTPUTS + [JsOutputTypeScriptDeclarations])] + 
-    [JsOutputTypeScriptTransitiveDeclartions(files = transitive_declarations)]
+  providers = ([output(files = outputs[output]) for output in (SUPPORTED_OUTPUTS + 
+    [JsOutputTypeScriptDeclarations])] + 
+    [JsOutputTypeScriptTransitiveDeclartions(files = transitive_dts)])
 
   return {
       "files": files,
