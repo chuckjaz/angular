@@ -16,7 +16,7 @@
 """
 # pylint: disable=unused-argument
 # pylint: disable=missing-docstring
-load(":common/compilation.bzl", "COMMON_ATTRIBUTES", "compile_ts", "ts_providers_dict_to_struct")
+load(":common/compilation.bzl", "COMMON_ATTRIBUTES", "compile_ts", "ts_providers_dict_to_struct", "TypeScriptDeclarations", "TypeScriptTransitiveDeclarations")
 load(":executables.bzl", "get_tsc", "get_node")
 load(":common/tsconfig.bzl", "create_tsconfig")
 

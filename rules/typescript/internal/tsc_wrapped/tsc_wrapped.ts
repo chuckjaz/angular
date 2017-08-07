@@ -6,6 +6,9 @@ import {CachedFileLoader, FileCache, FileLoader, UncachedFileLoader} from './fil
 import {BazelOptions, parseTsconfig} from './tsconfig';
 import {debug, log, runAsWorker, runWorkerLoop} from './worker';
 
+const JS_EXT = /\.js$/;
+const LOCAL_JS_EXT = /(__[^\.]+)?\.js$/;
+
 export function main(args) {
   if (runAsWorker(args)) {
     log('Starting TypeScript compiler persistent worker...');
@@ -104,6 +107,18 @@ export class CompilerHost implements ts.CompilerHost {
       onError?: (message: string) => void,
       sourceFiles?: ts.SourceFile[]): void {
     fileName = this.flattenOutDir(fileName);
+
+    // Replace the name with the requested suffix.
+    const suffix = this.bazelOpts.suffix;
+    if (suffix && suffix != "") {
+      if (this.bazelOpts.locale) {
+        // i18n paths are required to end with __locale.js so we put
+        // the .closure segment before the __locale
+        fileName = fileName.replace(LOCAL_JS_EXT, `.${suffix}$1.js`);
+      } else {
+        fileName = fileName.replace(JS_EXT, `.${suffix}.js`);
+      }
+    }
 
     // Prepend the output directory.
     fileName = path.join(this.options.outDir, fileName);

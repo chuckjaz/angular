@@ -94,6 +94,13 @@ export interface BazelOptions {
    * file system access to paths under this prefix.
    */
   nodeModulesPrefix: string;
+
+  /**
+   * The suffix to use for JavaScript output. For example, if this contains
+   * "es5" the output of someFile.ts will be someFile.es5.js (or
+   * someFile.es5__local.js for localized files when local is also set).
+   */
+  suffix?: string;
 }
 
 export interface ParsedTsConfig {

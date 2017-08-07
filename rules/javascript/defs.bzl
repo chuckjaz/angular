@@ -12,20 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-workspace(name = "io_angular_rules_typescript")
-
-local_repository(
-    name = "io_angular_rules_javascript",
-    path = "../javascript",
-)
-
-load("//:defs.bzl", "node_repositories")
-
-# Install a hermetic version of node.
-# After this is run, these labels will be available:
-# - The nodejs install:
-#   @io_angular_rules_typescript_node//:bin/node
-#   @io_angular_rules_typescript_node//:bin/npm
-# - The yarn package manager:
-#   @yarn//:yarn
-node_repositories(package_json = "//:package.json")
+ClosureES2015Output = provider()
+ESMES2015Output = provider()
+ESMES2016Output = provider()
+CommonJSEs5Output = provider()

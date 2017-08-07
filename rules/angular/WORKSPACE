@@ -14,6 +14,11 @@
 
 workspace(name = "io_angular_rules_angular")
 
+local_repository(
+    name = "io_angular_rules_javascript",
+    path = "../javascript",
+)
+
 # Users should get this from a git_repository instead. See README.md.
 # TODO(alexeagle): we should test against released version and HEAD
 # OR we should always release rules_typescript and rules_angular in lock-step

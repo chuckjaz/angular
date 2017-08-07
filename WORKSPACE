@@ -1,4 +1,9 @@
 local_repository(
+    name = "io_angular_rules_javascript",
+    path = "rules/javascript",
+)
+
+local_repository(
     name = "io_angular_rules_typescript",
     path = "rules/typescript",
 )

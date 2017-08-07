@@ -17,6 +17,7 @@
 
 load(":common/module_mappings.bzl", "module_mappings_aspect")
 load(":common/json_marshal.bzl", "json_marshal")
+load("@io_angular_rules_javascript//:defs.bzl", "ClosureES2015Output", "ESMES2015Output", "ESMES2016Output", "CommonJSEs5Output")
 
 BASE_ATTRIBUTES = dict()
 
@@ -50,45 +51,41 @@ COMMON_ATTRIBUTES = dict(BASE_ATTRIBUTES, **{
     "generate_externs": attr.bool(default = True),
 })
 
-JsOutputEsmEs2015 = provider() 
-JsOutputEsmEs5 = provider()
-JsOutputUmdEs5 = provider()
-JsOutputCommonJsEs5 = provider()
-JsOutputTypeScriptDeclarations = provider()
-JsOutputTypeScriptTransitiveDeclartions = provider()
+TypeScriptDeclarations = provider()
+TypeScriptTransitiveDeclarations = provider()
 
 EMIT_OPTIONS = dict({
-  JsOutputEsmEs2015: struct(
+  ClosureES2015Output: struct(
     name = "es6",
     module = "es2015",
     target = "ES2015",
-    suffix = "closure.js",
+    suffix = "closure",
   ),
-  JsOutputEsmEs5: struct(
+  ESMES2015Output: struct(
     name = "es5",
     module = "es2015",
     target = "ES5",
-    suffix = ".js",
-    dev_mode = True,
+    suffix = "es5",
   ),
-  JsOutputUmdEs5: struct(
+  ESMES2016Output: struct(
     name = "umd",
     module = "umd",
     target = "ES5",
-    suffix = "umd.js",
+    suffix = "umd",
+    dev_mode = True,
   ),
-  JsOutputCommonJsEs5: struct(
+  CommonJSEs5Output: struct(
     name = "common",
     module = "commonjs",
     target = "ES5",
-    suffix = "common.js",
+    suffix = "",
   )
 })
 
 def _dev_mode(options):
   return hasattr(options, "dev_mode") and options.dev_mode
 
-SUPPORTED_OUTPUTS = [JsOutputEsmEs2015, JsOutputEsmEs5, JsOutputUmdEs5, JsOutputCommonJsEs5]
+SUPPORTED_OUTPUTS = [ClosureES2015Output, ESMES2015Output, ESMES2016Output, CommonJSEs5Output]
 
 # TODO(plf): Enforce this at analysis time.
 def assert_js_or_typescript_deps(ctx):
@@ -133,8 +130,9 @@ def _output_basename(ctx, label, input_file):
   dot = basename.rfind(".")
   return basename[:dot]
 
-def _enter_output(ctx, outputs, output, basename, suffix):
-  file = ctx.new_file(basename + suffix)
+def _enter_output(ctx, outputs, output, basename, suffix = "", ext = None):
+  ext = ext if ext else "." + suffix + ".js" if suffix != "" else ".js"
+  file = ctx.new_file(basename + ext)
   outputs[output] = outputs[output] + [file] if output in outputs else [file]
 
 def compile_ts(ctx,
@@ -192,8 +190,8 @@ def compile_ts(ctx,
       output_basename = _output_basename(ctx, src.label, f)
       for output in SUPPORTED_OUTPUTS:
         suffix = EMIT_OPTIONS[output].suffix
-        _enter_output(ctx, outputs, output, output_basename, suffix)
-      _enter_output(ctx, outputs, JsOutputTypeScriptDeclarations, output_basename, ".d.ts")
+        _enter_output(ctx, outputs, output, output_basename, suffix=suffix)
+      _enter_output(ctx, outputs, TypeScriptDeclarations, output_basename, ext=".d.ts")
   
   # TODO(chuckj): Re-enabled production of .extern.js 
   # if has_sources and ctx.attr.runtime != "nodejs":
@@ -246,18 +244,18 @@ def compile_ts(ctx,
       ctx.file_action(output=tsconfig_json, content=json_marshal(tsconfig))
       
       action_inputs = compilation_inputs + [tsconfig_json]
-      action_outputs = outputs[output] + ((outputs[JsOutputTypeScriptDeclarations] + [devmode_manifest]) if _dev_mode(options) else [])
+      action_outputs = outputs[output] + ((outputs[TypeScriptDeclarations] + [devmode_manifest]) if _dev_mode(options) else [])
       compile_action(ctx, action_inputs, action_outputs, tsconfig_json.path)
 
-  gen_declarations = outputs[JsOutputTypeScriptDeclarations] if JsOutputTypeScriptDeclarations in outputs else []
+  gen_declarations = outputs[TypeScriptDeclarations] if TypeScriptDeclarations in outputs else []
 
   # TODO(martinprobst): Merge the generated .d.ts files, and enforce strict
   # deps (do not re-export transitive types from the transitive closure).
   transitive_decls = input_declarations + gen_declarations
 
   if is_library:
-    es6_sources = set(outputs[JsOutputEsmEs5] + tsickle_externs)
-    es5_sources = set(outputs[JsOutputEsmEs5])
+    es6_sources = set(outputs[ClosureES2015Output] + tsickle_externs)
+    es5_sources = set(outputs[CommonJSEs5Output])
   else:
     es6_sources = set(tsickle_externs)
     es5_sources = set(tsickle_externs)
@@ -283,8 +281,8 @@ def compile_ts(ctx,
     files += set(tsickle_externs)
 
   providers = ([output(files = outputs[output]) for output in (SUPPORTED_OUTPUTS + 
-    [JsOutputTypeScriptDeclarations])] + 
-    [JsOutputTypeScriptTransitiveDeclartions(files = transitive_dts)])
+    [TypeScriptDeclarations])] +
+    [TypeScriptTransitiveDeclarations(files = transitive_dts)])
 
   return {
       "files": files,
@@ -298,10 +296,10 @@ def compile_ts(ctx,
       ),
       # TODO(martinprobst): Prune transitive deps, only re-export what's needed.
       "typescript": {
-          "declarations": declarations, # Deprecated. Use JsOutputTypescriptDeclarations provider instead
-          "transitive_declarations": transitive_decls, # Deprecated. Use JsOutputTransitiveTypescriptDeclarations provider instead
-          "es6_sources": es6_sources, # Deprecated. Use JsOutputEsmEs2015 provider instead
-          "es5_sources": es5_sources, # Deprecated. Use JsOutputEsmEs5 provider instead
+          "declarations": declarations, # Deprecated. Use ypescriptDeclarations provider instead
+          "transitive_declarations": transitive_decls, # Deprecated. Use TransitiveTypescriptDeclarations provider instead
+          "es6_sources": es6_sources, # Deprecated. Use ClosureES2015Output provider instead
+          "es5_sources": es5_sources, # Deprecated. Use CommonJSEs5Output provider instead
           "devmode_manifest": devmode_manifest,
           "type_blacklisted_declarations": type_blacklisted_declarations,
           "tsickle_externs": tsickle_externs,
