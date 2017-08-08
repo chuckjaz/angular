@@ -68,10 +68,10 @@ EMIT_OPTIONS = dict({
     suffix = "es5",
   ),
   ESMES2016Output: struct(
-    name = "umd",
-    module = "umd",
-    target = "ES5",
-    suffix = "umd",
+    name = "es2016",
+    module = "es2015",
+    target = "ES2016",
+    suffix = "es2016",
     dev_mode = True,
   ),
   CommonJSES5Output: struct(
