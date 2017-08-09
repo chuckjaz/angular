@@ -20,7 +20,7 @@ load(":common/compilation.bzl", "COMMON_ATTRIBUTES", "compile_ts", "ts_providers
 load(":executables.bzl", "get_tsc", "get_node")
 load(":common/tsconfig.bzl", "create_tsconfig")
 
-def _compile_action(ctx, inputs, outputs, config_file_path):
+def default_compile_action(ctx, inputs, outputs, config_file_path, provider, mnemonic = None, message = None):
   externs_files = []
   non_externs_files = []
   for output in outputs:
@@ -45,13 +45,13 @@ def _compile_action(ctx, inputs, outputs, config_file_path):
   # rather than the contents getting expanded.
   if ctx.attr.supports_workers:
     arguments = ["@@" + config_file_path]
-    mnemonic = "TypeScriptCompile"
+    mnemonic = "TypeScriptCompile" if mnemonic == None else mnemonic
   else:
     arguments = ["-p", config_file_path]
-    mnemonic = "tsc"
+    mnemonic = "tsc" if mnemonic == None else mnemonic
 
   ctx.action(
-      progress_message = "Compiling TypeScript (devmode) %s" % ctx.label,
+      progress_message = "Compiling TypeScript %s" % ctx.label if message == None else message,
       mnemonic = mnemonic,
       inputs = action_inputs,
       outputs = non_externs_files,
@@ -62,13 +62,16 @@ def _compile_action(ctx, inputs, outputs, config_file_path):
       },
   )
 
+def _compile_action(ctx, inputs, outputs, config_file_path, provider):
+  default_compile_action(ctx, inputs, outputs, config_file_path, provider)
 
-def _devmode_compile_action(ctx, inputs, outputs, config_file_path):
-  _compile_action(ctx, inputs, outputs, config_file_path)
+def _devmode_compile_action(ctx, inputs, outputs, config_file_path, provider):
+  default_compile_action(ctx, inputs, outputs, config_file_path, provider, None, "Compiling TypeScript (devmode) %s" % ctx.label)
 
 def tsc_wrapped_tsconfig(ctx,
                          files,
                          srcs,
+                         provider,
                          target,
                          module,
                          suffix,

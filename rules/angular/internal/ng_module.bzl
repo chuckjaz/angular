@@ -65,7 +65,7 @@ def _ngc_tsconfig(ctx, files, srcs, **kwargs):
       }
   })
 
-def _compile_action(ctx, inputs, outputs, config_file_path):
+def _compile_action(ctx, inputs, outputs, config_file_path, provider):
   externs_files = []
   non_externs_files = []
   for output in outputs:
@@ -105,9 +105,9 @@ def _compile_action(ctx, inputs, outputs, config_file_path):
       },
   )
 
-def _devmode_compile_action(ctx, inputs, outputs, config_file_path):
+def _devmode_compile_action(ctx, inputs, outputs, config_file_path, proivder):
   # TODO(alexeagle): compile for feeding to Closure Compiler
-  _compile_action(ctx, inputs, outputs + _expected_outs(ctx), config_file_path)
+  _compile_action(ctx, inputs, outputs + _expected_outs(ctx), config_file_path, provider)
 
 def _compile_ng(ctx):
   declarations = []

@@ -130,10 +130,10 @@ export enum EmitFlags {
   JS = 1 << 1,
   Metadata = 1 << 2,
   I18nBundle = 1 << 3,
-  Summary = 1 << 4,
+  Factories = 1 << 4,
 
   Default = DTS | JS,
-  All = DTS | JS | Metadata | I18nBundle | Summary
+  All = DTS | JS | Metadata | I18nBundle | Factories
 }
 
 // TODO(chuckj): Support CustomTransformers once we require TypeScript 2.3+

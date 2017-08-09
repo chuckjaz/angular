@@ -94,7 +94,7 @@ def create_tsconfig(ctx, files, srcs, target, module, suffix=None,
   bazel_options = {
       "target": str(ctx.label),
       "tsickle": tsickle_externs != None,
-      "suffix": suffix if suffix else "",
+      "suffix": suffix,
       "tsickleGenerateExterns": getattr(ctx.attr, "generate_externs", True),
       "tsickleExternsPath": tsickle_externs.path if tsickle_externs else "",
       "untyped": not getattr(ctx.attr, "tsickle_typed", False),
@@ -188,4 +188,3 @@ def create_tsconfig(ctx, files, srcs, target, module, suffix=None,
     "files": [workspace_path + "/" + f.path for f in files],
     "compileOnSave": False,
   }
-  

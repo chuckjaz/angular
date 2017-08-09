@@ -220,7 +220,8 @@ class AngularCompilerProgram implements Program {
 
   private generateFiles() {
     try {
-      return this.options.skipTemplateCodegen ? [] : this.compiler.emitAllImpls(this.analyzedModules);
+      return this.options.skipTemplateCodegen ? [] :
+                                                this.compiler.emitAllImpls(this.analyzedModules);
     } catch (e) {
       if (isSyntaxError(e)) {
         this._generatedFileDiagnostics = [{message: e.message, category: DiagnosticCategory.Error}];
@@ -279,7 +280,25 @@ function writeMetadata(
 function createWriteFileCallback(
     emitFlags: EmitFlags, host: ts.CompilerHost, collector: MetadataCollector,
     ngOptions: CompilerOptions, emitMap: Map<string, string>) {
-  const withMetadata =
+  const metadataOnly =
+      (fileName: string, data: string, writeByteOrderMark: boolean,
+       onError?: (message: string) => void, sourceFiles?: ts.SourceFile[]) => {
+        if (sourceFiles && sourceFiles.length == 1 && !GENERATED_FILES.test(fileName)) {
+          writeMetadata(fileName, sourceFiles[0], collector, ngOptions);
+        }
+      };
+  const angularFilesOnly =
+      (fileName: string, data: string, writeByteOrderMark: boolean,
+       onError?: (message: string) => void, sourceFiles?: ts.SourceFile[]) => {
+        const generatedFile = GENERATED_FILES.test(fileName);
+        if (generatedFile && data != '') {
+          host.writeFile(fileName, data, writeByteOrderMark, onError, sourceFiles);
+        }
+        if (!generatedFile && sourceFiles && sourceFiles.length == 1) {
+          emitMap.set(sourceFiles[0].fileName, fileName);
+        }
+      };
+  const allFilesWithMetadata =
       (fileName: string, data: string, writeByteOrderMark: boolean,
        onError?: (message: string) => void, sourceFiles?: ts.SourceFile[]) => {
         const generatedFile = GENERATED_FILES.test(fileName);
@@ -291,7 +310,7 @@ function createWriteFileCallback(
           writeMetadata(fileName, sourceFiles[0], collector, ngOptions);
         }
       };
-  const withoutMetadata =
+  const allFilesWithoutMetadata =
       (fileName: string, data: string, writeByteOrderMark: boolean,
        onError?: (message: string) => void, sourceFiles?: ts.SourceFile[]) => {
         const generatedFile = GENERATED_FILES.test(fileName);
@@ -302,7 +321,38 @@ function createWriteFileCallback(
           emitMap.set(sourceFiles[0].fileName, fileName);
         }
       };
-  return (emitFlags & EmitFlags.Metadata) != 0 ? withMetadata : withoutMetadata;
+  const defaultWriteFileCallback =
+      (fileName: string, data: string, writeByteOrderMark: boolean,
+       onError?: (message: string) => void, sourceFiles?: ts.SourceFile[]) => {
+        const generatedFile = GENERATED_FILES.test(fileName);
+        if (generatedFile) {
+          if ((emitFlags & EmitFlags.Factories) != 0 && data != '') {
+            host.writeFile(fileName, data, writeByteOrderMark, onError, sourceFiles);
+          }
+          if (sourceFiles && sourceFiles.length == 1) {
+            emitMap.set(sourceFiles[0].fileName, fileName);
+          }
+        } else {
+          const isJs = /\.js$/.test(fileName);
+          const isDTS = /\.d\.ts$/.test(fileName);
+          if (isJs && (emitFlags & EmitFlags.JS) != 0 ||
+              isDTS && (emitFlags & EmitFlags.DTS) != 0 || (!isJs && !isDTS)) {
+            host.writeFile(fileName, data, writeByteOrderMark, onError, sourceFiles);
+          }
+        }
+      };
+  switch (emitFlags) {
+    case EmitFlags.All:
+    case EmitFlags.DTS|EmitFlags.JS|EmitFlags.Factories|EmitFlags.Metadata:
+      return allFilesWithMetadata;
+    case EmitFlags.DTS|EmitFlags.JS|EmitFlags.Factories:
+      return allFilesWithoutMetadata;
+    case EmitFlags.Factories:
+      return angularFilesOnly;
+    case EmitFlags.Metadata:
+      return metadataOnly;
+  }
+  return defaultWriteFileCallback;
 }
 
 function getNgOptionDiagnostics(options: CompilerOptions): Diagnostic[] {

@@ -78,14 +78,14 @@ EMIT_OPTIONS = dict({
     name = "common",
     module = "commonjs",
     target = "ES5",
-    suffix = "",
+    suffix = None,
   )
 })
 
 def _dev_mode(options):
   return hasattr(options, "dev_mode") and options.dev_mode
 
-SUPPORTED_OUTPUTS = [ClosureES2015Output, ESMES2015Output, ESMES2016Output, CommonJSES5Output]
+SUPPORTED_PROVIDERS = [ClosureES2015Output, ESMES2015Output, ESMES2016Output, CommonJSES5Output]
 
 # TODO(plf): Enforce this at analysis time.
 def assert_js_or_typescript_deps(ctx):
@@ -99,7 +99,7 @@ def assert_js_or_typescript_deps(ctx):
           "JavaScript library rules (js_library, pinto_library, etc, but " +
           "also proto_library and some others).\n")
 
-def _collect_transitive_dts(ctx):
+def collect_transitive_dts(ctx):
   all_deps_declarations = set()
   type_blacklisted_declarations = set()
   for extra in ctx.files._additional_d_ts:
@@ -131,7 +131,7 @@ def _output_basename(ctx, label, input_file):
   return basename[:dot]
 
 def _enter_output(ctx, outputs, output, basename, suffix = "", ext = None):
-  ext = ext if ext else "." + suffix + ".js" if suffix != "" else ".js"
+  ext = ext if ext else "." + suffix + ".js" if suffix != None and suffix != "" else ".js"
   file = ctx.new_file(basename + ext)
   outputs[output] = outputs[output] + [file] if output in outputs else [file]
 
@@ -188,17 +188,17 @@ def compile_ts(ctx,
         continue
 
       output_basename = _output_basename(ctx, src.label, f)
-      for output in SUPPORTED_OUTPUTS:
-        suffix = EMIT_OPTIONS[output].suffix
-        _enter_output(ctx, outputs, output, output_basename, suffix=suffix)
+      for provider in SUPPORTED_PROVIDERS:
+        suffix = EMIT_OPTIONS[provider].suffix
+        _enter_output(ctx, outputs, provider, output_basename, suffix=suffix)
       _enter_output(ctx, outputs, TypeScriptDeclarations, output_basename, ext=".d.ts")
-  
-  # TODO(chuckj): Re-enabled production of .extern.js 
+
+  # TODO(chuckj): Re-enabled production of .extern.js
   # if has_sources and ctx.attr.runtime != "nodejs":
   #   # Note: setting this variable controls whether tsickle is run at all.
   #   tsickle_externs = [ctx.new_file(ctx.label.name + ".externs.js")]
 
-  transitive_dts = _collect_transitive_dts(ctx)
+  transitive_dts = collect_transitive_dts(ctx)
   input_declarations = transitive_dts.transitive_declarations + src_declarations
   type_blacklisted_declarations = transitive_dts.type_blacklisted_declarations
   if not is_library and not ctx.attr.generate_externs:
@@ -221,16 +221,17 @@ def compile_ts(ctx,
 
 
     # Create the actions that produce the supported output formats
-    for output in SUPPORTED_OUTPUTS:
-      options = EMIT_OPTIONS[output]
+    for provider in SUPPORTED_PROVIDERS:
+      options = EMIT_OPTIONS[provider]
       tsconfig_json = ctx.new_file(ctx.label.name + "_" + options.name + "_tsconfig.json")
       tsconfig = tsc_wrapped_tsconfig(
         ctx,
         compilation_inputs,
         srcs,
-        options.target,
-        options.module,
-        options.suffix,
+        provider,
+        target=options.target,
+        module=options.module,
+        suffix=options.suffix,
         jsx_factory=jsx_factory,
         devmode_manifest=devmode_manifest.path if _dev_mode(options) else None,
         tsickle_externs=tsickle_externs_path,
@@ -242,10 +243,13 @@ def compile_ts(ctx,
       if not _dev_mode(options):
         tsconfig["compilerOptions"]["declaration"] = False
       ctx.file_action(output=tsconfig_json, content=json_marshal(tsconfig))
-      
+
       action_inputs = compilation_inputs + [tsconfig_json]
-      action_outputs = outputs[output] + ((outputs[TypeScriptDeclarations] + [devmode_manifest]) if _dev_mode(options) else [])
-      compile_action(ctx, action_inputs, action_outputs, tsconfig_json.path)
+      action_outputs = outputs[provider] + ((outputs[TypeScriptDeclarations] + [devmode_manifest]) if _dev_mode(options) else [])
+      if _dev_mode(options):
+        devmode_compile_action(ctx, action_inputs, action_outputs, tsconfig_json.path, provider)
+      else:
+        compile_action(ctx, action_inputs, action_outputs, tsconfig_json.path, provider)
 
   gen_declarations = outputs[TypeScriptDeclarations] if TypeScriptDeclarations in outputs else []
 
@@ -280,7 +284,7 @@ def compile_ts(ctx,
   if not is_library:
     files += set(tsickle_externs)
 
-  providers = ([output(files = outputs[output]) for output in (SUPPORTED_OUTPUTS + 
+  providers = ([provider(files = depset(outputs[provider])) for provider in (SUPPORTED_PROVIDERS +
     [TypeScriptDeclarations])] +
     [TypeScriptTransitiveDeclarations(files = transitive_dts)])
 
@@ -321,4 +325,3 @@ def ts_providers_dict_to_struct(d):
     if type(value) == type({}):
       d[key] = struct(**value)
   return struct(**d)
-  

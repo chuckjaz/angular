@@ -92,6 +92,10 @@ interface Options extends ts.CompilerOptions {
   // matched by the `files` / `includes` in the `tsconfig.json`.
   // This is off by default.
   alwaysCompileGeneratedCode?: boolean;
+
+  // Whether to only emit Angular generated files.
+  // This is off by default.
+  angularFilesOnly?: boolean;
 }
 
 export default Options;

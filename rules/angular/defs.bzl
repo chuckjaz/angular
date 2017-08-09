@@ -17,4 +17,5 @@ Users should not load files under "/internal"
 """
 
 load("//internal:ng_module.bzl", "ng_module")
+load("//internal:ng_library.bzl", "ng_library")
 load("//internal:flatten_module.bzl", "flatten_module")

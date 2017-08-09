@@ -122,7 +122,7 @@ function getProjectDirectory(project: string): string {
   return isFile ? path.dirname(project) : project;
 }
 
-function normalizeNames(names: string[] | undefined, basePath: string): string[] | undefined {
+function normalizeNames(names: string[] | undefined, basePath: string): string[]|undefined {
   if (names) {
     return names.map(n => path.normalize(path.join(basePath, n)));
   }
@@ -185,16 +185,29 @@ export function main(
     check(basePath, ngProgram.getTsSyntacticDiagnostics());
 
     // Check TypeScript semantic and Angular structure diagnostics
-    check(basePath, ngProgram.getTsSemanticDiagnostics(), ngOptions.skipTemplateCodegen ? [] : ngProgram.getNgStructuralDiagnostics());
+    check(
+        basePath, ngProgram.getTsSemanticDiagnostics(),
+        ngOptions.skipTemplateCodegen ? [] : ngProgram.getNgStructuralDiagnostics());
 
     // Check Angular semantic diagnostics
-    if (!ngOptions.skipTemplateCodegen)
-      check(basePath, ngProgram.getNgSemanticDiagnostics());
+    if (!ngOptions.skipTemplateCodegen) check(basePath, ngProgram.getNgSemanticDiagnostics());
 
-    ngProgram.emit({
-      emitFlags: api.EmitFlags.Default |
-          ((ngOptions.skipMetadataEmit || ngOptions.flatModuleOutFile) ? 0 : api.EmitFlags.Metadata)
-    });
+    let emitFlags: api.EmitFlags = 0;
+
+    // Include metadata unless it is suppressed
+    if (!(ngOptions.skipMetadataEmit || ngOptions.flatModuleOutFile)) {
+      emitFlags |= api.EmitFlags.Metadata;
+    }
+    // Include normal TypeScript output unless it is supressed
+    if (!ngOptions.angularFilesOnly) {
+      emitFlags |= api.EmitFlags.JS | api.EmitFlags.DTS;
+    }
+    // Include factory files, unless it is suppressed
+    if (!ngOptions.skipTemplateCodegen) {
+      emitFlags |= api.EmitFlags.Factories;
+    }
+
+    ngProgram.emit({emitFlags});
   } catch (e) {
     if (isSyntaxError(e)) {
       consoleError(e.message);
