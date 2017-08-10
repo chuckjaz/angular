@@ -20,6 +20,7 @@ export function privateEntriesToIndex(index: string, privates: BundlePrivateEntr
 
   // Export all of the index symbols.
   results.push(`export * from '${index}';`, '');
+  results.push('', `/* ${index} private symbols used by metadata */`);
 
   // Simplify the exports
   const exports = new Map<string, BundlePrivateEntry[]>();

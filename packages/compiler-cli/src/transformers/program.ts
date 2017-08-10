@@ -33,10 +33,11 @@ class AngularCompilerProgram implements Program {
   private oldTsProgram: ts.Program|undefined;
   private tsProgram: ts.Program;
   private aotCompilerHost: AotCompilerHost;
-  private compiler: AotCompiler;
   private srcNames: string[];
   private collector: MetadataCollector;
+
   // Lazily initialized fields
+  private _compiler: AotCompiler|undefined;
   private _analyzedModules: NgAnalyzedModules|undefined;
   private _structuralDiagnostics: Diagnostic[] = [];
   private _stubs: GeneratedFile[]|undefined;
@@ -59,8 +60,6 @@ class AngularCompilerProgram implements Program {
     if (host.readResource) {
       this.aotCompilerHost.loadResource = host.readResource.bind(host);
     }
-    const {compiler} = createAotCompiler(this.aotCompilerHost, options);
-    this.compiler = compiler;
     this.collector = new MetadataCollector({quotedNames: true});
   }
 
@@ -139,6 +138,10 @@ class AngularCompilerProgram implements Program {
   }
 
   // Private members
+  private get compiler(): AotCompiler {
+    return this._compiler || (this._compiler = this.getAotCompiler());
+  }
+
   private get analyzedModules(): NgAnalyzedModules {
     return this._analyzedModules || (this._analyzedModules = this.analyzeModules());
   }
@@ -201,6 +204,11 @@ class AngularCompilerProgram implements Program {
       return emptyModules;
     }
     throw e;
+  }
+
+  private getAotCompiler(): AotCompiler {
+    const {compiler} = createAotCompiler(this.aotCompilerHost, this.options);
+    return compiler;
   }
 
   private analyzeModules() {

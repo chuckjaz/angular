@@ -17,7 +17,18 @@ import * as ts from 'typescript';
 import {parseTsconfig, CompilerHost, UncachedFileLoader} from 'tsc_wrapped';
 
 function main(args: string[]) {
-  const [{options, bazelOpts, files, config}] = parseTsconfig(args[1]);
+  const [configuration, errors] = parseTsconfig(args[1]);
+
+  if (errors && errors.length) {
+    console.error(ts.formatDiagnostics(errors, {
+      getCurrentDirectory() { return process.cwd(); },
+      getCanonicalFileName(fileName: string) { return fileName; },
+      getNewLine(): string { return '\n'; }
+    }));
+    return 1;
+  }
+
+  const {options, bazelOpts, files, config} = configuration;
   const ngOptions: {expectedOut: string[]} = (config as any).angularCompilerOptions;
 
   const compilerHost = new CompilerHost(files, options, bazelOpts, ts.createCompilerHost(options), new UncachedFileLoader());

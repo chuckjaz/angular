@@ -168,6 +168,18 @@ export function main(
       const {host: bundleHost, indexName, errors} =
           createBundleIndexHost(ngOptions, indexNames, host);
       if (errors) check(basePath, errors);
+      if (ngOptions.angularFilesOnly) {
+        if (!indexName) {
+          throw syntaxError('Could not determine the flat module index name');
+        }
+        // By-pass the normal process and go directly to the emit, filtering just for the
+        // files we need.
+        rootFileNames.push(indexName);
+        const program = ts.createProgram(rootFileNames, options, bundleHost);
+        const sourceFile = program.getSourceFile(indexName);
+        program.emit(sourceFile);
+        return 0;
+      }
       if (indexName) addGeneratedFileName(indexName);
       host = bundleHost;
     }

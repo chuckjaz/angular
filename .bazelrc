@@ -4,3 +4,6 @@ build --spawn_strategy=standalone
 
 # Performance: avoid stat'ing input files
 build --watchfs
+
+# Enable the experimental ui
+build --experimental_ui

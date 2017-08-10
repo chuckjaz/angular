@@ -59,9 +59,8 @@ def _ngc_tsconfig(ctx, files, srcs, apis, index_name, **kwargs):
       "angularCompilerOptions": {
           "skipMetadataEmit": False,
           "skipTemplateCodegen": True,
-          "angularFilesOnly": False,
+          "angularFilesOnly": True,
           "flatModuleOutFile": index_name,
-          "flatModuleIndex": [apis],
           "flatModuleId": _determine_module_id(ctx),
       }
   })
@@ -74,7 +73,7 @@ def _ng_entry_point_impl(ctx):
   index_name = index.basename[:index.basename.rfind(".")]
 
   tsconfig_json = ctx.new_file(ctx.label.name + "_angular_metadata_tsconfig.json")
-  tsconfig = _ngc_tsconfig(ctx, [], dts_files, apis, index_name,
+  tsconfig = _ngc_tsconfig(ctx, [apis], dts_files, apis, index_name,
     target = "ES2016",
     module = "es2015",
     suffix = "es2016"
@@ -82,10 +81,10 @@ def _ng_entry_point_impl(ctx):
   ctx.file_action(output=tsconfig_json, content=json_marshal(tsconfig))
   
   # Produces an <index-name>.<suffix>.js file as a <index-name>.metadata.json
-  index_js_file = ctx.new_file(ctx.bin_dir, index_name + "es2015.js")
+  index_js_file = ctx.new_file(ctx.bin_dir, index_name + ".es2016.js")
   index_dts_file = ctx.new_file(ctx.bin_dir, index_name + ".d.ts")
-  index_metadata_file = ctx.new_file(ctx.bin_dir, index_name + "metadata.json")
-  input = dts_files.to_list() + metadata_files.to_list() + [index] + ctx.files.srcs
+  index_metadata_file = ctx.new_file(ctx.bin_dir, index_name + ".metadata.json")
+  input = dts_files.to_list() + metadata_files.to_list() + [index] + ctx.files.srcs + [tsconfig_json]
   output = depset([index_js_file, index_dts_file, index_metadata_file])
   default_compile_action(ctx, input, output, tsconfig_json.path, 
      AngularEntryPointOutput,
@@ -118,7 +117,7 @@ ng_entry_point = rule(
         executable = True,
         cfg = "host",
       ),
-      "supports_workers": attr.bool(default = True),
+      "supports_workers": attr.bool(default = False),
       
       # Duplicated from the ts_library rule
       "tsconfig": attr.label(allow_files = True, single_file=True),
