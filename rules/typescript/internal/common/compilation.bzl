@@ -51,6 +51,8 @@ COMMON_ATTRIBUTES = dict(BASE_ATTRIBUTES, **{
     "generate_externs": attr.bool(default = True),
 })
 
+# TODO(chuckj): Decide a naming convention for providers.
+# I use XxxOutput for JavaScript but elided the Output for TypeScript
 TypeScriptDeclarations = provider()
 TypeScriptTransitiveDeclarations = provider()
 
@@ -79,11 +81,18 @@ EMIT_OPTIONS = dict({
     module = "commonjs",
     target = "ES5",
     suffix = None,
+    # TODO(chuckj): For good preformance this should be in dev mode to prevent both actions from running,
+    # but the bootstrap version of the compiler (which just executes tsc to compile the compiler wrappers)
+    # doesn't support renaming so the .d.ts must be emitted with the non-suffix version of the files.
+    declarations = True,
   )
 })
 
 def _dev_mode(options):
   return hasattr(options, "dev_mode") and options.dev_mode
+
+def _emit_declarations(options):
+  return hasattr(options, "declarations") and options.declarations
 
 SUPPORTED_PROVIDERS = [ClosureES2015Output, ESMES2015Output, ESMES2016Output, CommonJSES5Output]
 
@@ -240,12 +249,14 @@ def compile_ts(ctx,
 
       # Produce the output .d.ts files when producing the dev_mode output
       # This reduces the number of actions necessary for development turn-around
-      if not _dev_mode(options):
+      if not _emit_declarations(options):
         tsconfig["compilerOptions"]["declaration"] = False
       ctx.file_action(output=tsconfig_json, content=json_marshal(tsconfig))
 
       action_inputs = compilation_inputs + [tsconfig_json]
-      action_outputs = outputs[provider] + ((outputs[TypeScriptDeclarations] + [devmode_manifest]) if _dev_mode(options) else [])
+      action_outputs = outputs[provider] + (
+        ([devmode_manifest] if _dev_mode(options) else []) +
+        (outputs[TypeScriptDeclarations] if _emit_declarations(options) else []))
       if _dev_mode(options):
         devmode_compile_action(ctx, action_inputs, action_outputs, tsconfig_json.path, provider)
       else:
@@ -286,7 +297,7 @@ def compile_ts(ctx,
 
   providers = ([provider(files = depset(outputs[provider])) for provider in (SUPPORTED_PROVIDERS +
     [TypeScriptDeclarations])] +
-    [TypeScriptTransitiveDeclarations(files = transitive_dts)])
+    [TypeScriptTransitiveDeclarations(files = depset(transitive_decls))])
 
   return {
       "files": files,

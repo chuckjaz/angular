@@ -17,5 +17,6 @@ Users should not load files under "/internal"
 """
 
 load("//internal:ng_module.bzl", "ng_module")
-load("//internal:ng_library.bzl", "ng_library")
+load("//internal:ng_library.bzl", "ng_library", "AngularMetadataOutput")
+load("//internal:ng_entry_point.bzl", "ng_entry_point", "AngularEntryPointOutput")
 load("//internal:flatten_module.bzl", "flatten_module")

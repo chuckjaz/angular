@@ -25,6 +25,7 @@ load(
 load("@io_angular_rules_typescript//internal:common/json_marshal.bzl", "json_marshal")
 
 AngularMetadataOutput = provider()
+ModuleId = provider()
 
 # For each .ts file expect a .metadata.json file to be emitted (which can be empty)
 def _expected_outs(ctx):
@@ -44,7 +45,7 @@ def _compile_action(ctx, inputs, outputs, config_file_path, provider):
 
 def _ngc_tsconfig(ctx, files, srcs, provider, **kwargs):
   config = tsc_wrapped_tsconfig(ctx, files, srcs, provider, **kwargs)
-  emitMetadata = provider == ESMES2016Output
+  emitMetadata = provider == ESMES2016Output or provider == AngularMetadataOutput
   return dict(config, **{
       "angularCompilerOptions": {
           "expectedOut": [o.path for o in _expected_outs(ctx)] if emitMetadata else [],
@@ -101,14 +102,14 @@ def _ng_library_impl(ctx):
     _produce_metadata_only(ctx, metadata_files.files)
     return struct(
         files = metadata_files.files,
-        providers = [metadata_files]
+        providers = [metadata_files, ModuleId(id = ctx.attr.module_name)]
     )
   else:
     ts_providers = compile_ts(ctx, is_library=True,
                                compile_action=_compile_action,
                                devmode_compile_action=_compile_action,
                                tsc_wrapped_tsconfig=_ngc_tsconfig)
-    ts_providers["providers"] += [metadata_files]
+    ts_providers["providers"] += [metadata_files, ModuleId(id = ctx.attr.module_name)]
     return ts_providers_dict_to_struct(ts_providers)
 
 ng_library = rule(
