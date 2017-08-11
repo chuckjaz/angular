@@ -73,7 +73,7 @@ def _ng_entry_point_impl(ctx):
   index_name = index.basename[:index.basename.rfind(".")]
 
   tsconfig_json = ctx.new_file(ctx.label.name + "_angular_metadata_tsconfig.json")
-  tsconfig = _ngc_tsconfig(ctx, [apis], dts_files, apis, index_name,
+  tsconfig = _ngc_tsconfig(ctx, [apis] + dts_files.to_list(), dts_files, apis, index_name,
     target = "ES2016",
     module = "es2015",
     suffix = "es2016"

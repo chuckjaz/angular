@@ -174,9 +174,10 @@ export function main(
         }
         // By-pass the normal process and go directly to the emit, filtering just for the
         // files we need.
-        rootFileNames.push(indexName);
-        const program = ts.createProgram(rootFileNames, options, bundleHost);
+        const program = ts.createProgram([indexName], options, bundleHost);
         const sourceFile = program.getSourceFile(indexName);
+        check(basePath, program.getSyntacticDiagnostics(sourceFile));
+        check(basePath, program.getSemanticDiagnostics(sourceFile));
         program.emit(sourceFile);
         return 0;
       }
