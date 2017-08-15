@@ -258,28 +258,28 @@ def _ng_package_impl(ctx):
 # for "@angular/core" and "http" for "@angular/common/http".
 
 # For an ng_entry_point directory layout is:
-#   /<directory>
-#     /package.json
-#     /<base-name>.d.ts
-#     /<base-name>.metadata.json
-#     /<.d.ts files (potentially in subdirectories)>
-#     /<index metdata json>
-#     /bundles
+#   <directory>/
+#     package.json
+#     <base-name>.d.ts
+#     <base-name>.metadata.json
+#     <.d.ts files (potentially in subdirectories)>
+#     <index metdata json>
+#     bundles/
 #       <base-name>.umd.js          (flat umd module, es5 target)
 #       <base-name>.umd.js.map
 #       <base-name>.umd.min.js
 #       <base-name>.umd.min.js.map
-#     /<module-name>
+#     <module-name>/
 #       <base-name>.es5.js          (flat esm module, es5 target)
 #       <base-name>.es5.js.map
 #       <base-name>.js              (flat esm module, es6 target)
 #       <base-name>.js.map
 
 # For a ng_library the directory layout is:
-#   /<directory>
-#    /package.json
-#    /<.d.ts files (potentially in subdirectories)
-#    /<.js and .js.map and .metadata.json files (potentially in subdirectories)
+#   <directory>/
+#    package.json
+#    <.d.ts files (potentially in subdirectories)
+#    <.js and .js.map and .metadata.json files (potentially in subdirectories)
 
 ng_package = rule(
     implementation = _ng_package_impl,
