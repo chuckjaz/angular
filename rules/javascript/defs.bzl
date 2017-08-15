@@ -16,3 +16,18 @@ ClosureES2015Output = provider()
 ESMES2015Output = provider()
 ESMES2016Output = provider()
 CommonJSES5Output = provider()
+
+METADATA = {
+  ClosureES2015Output: struct(
+    extension = ".closure.js"
+  ),
+  ESMES2015Output: struct(
+    extension = ".es5.js"
+  ),
+  ESMES2016Output: struct(
+    extension = ".es2016.js"
+  ),
+  CommonJSES5Output: struct(
+    extension = ".js"
+  )
+}

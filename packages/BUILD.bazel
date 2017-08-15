@@ -1,0 +1,8 @@
+package(default_visibility=["//visibility:public"])
+
+load("@io_angular_rules_angular//:defs.bzl", "ng_version")
+
+ng_version(
+  name = "version",
+  version = "5.0.0-beta.0"
+)

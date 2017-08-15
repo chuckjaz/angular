@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" Public API surface is re-exported here.
-Users should not load files under "/internal"
-"""
+AngularPackageVersion = provider()
 
-load("//internal:ng_module.bzl", "ng_module")
-load("//internal:ng_library.bzl", "ng_library", "AngularMetadata")
-load("//internal:ng_entry_point.bzl", "ng_entry_point", "AngularEntryPoint")
-load("//internal:ng_package.bzl", "ng_package", "AngularPackage")
-load("//internal:ng_version.bzl", "ng_version", "AngularPackageVersion")
+def _ng_version_impl(ctx):
+  return AngularPackageVersion(
+    version = ctx.attr.version
+  )
 
-load("//internal:flatten_module.bzl", "flatten_module")
+ng_version = rule(
+  implementation = _ng_version_impl,
+  attrs = {
+    "version": attr.string(mandatory=True),
+  }
+)

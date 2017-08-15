@@ -24,7 +24,7 @@ load(
 
 load("@io_angular_rules_typescript//internal:common/json_marshal.bzl", "json_marshal")
 
-AngularMetadataOutput = provider()
+AngularMetadata = provider()
 ModuleId = provider()
 
 # For each .ts file expect a .metadata.json file to be emitted (which can be empty)
@@ -45,7 +45,7 @@ def _compile_action(ctx, inputs, outputs, config_file_path, provider):
 
 def _ngc_tsconfig(ctx, files, srcs, provider, **kwargs):
   config = tsc_wrapped_tsconfig(ctx, files, srcs, provider, **kwargs)
-  emitMetadata = provider == ESMES2016Output or provider == AngularMetadataOutput
+  emitMetadata = provider == ESMES2016Output or provider == AngularMetadata
   return dict(config, **{
       "angularCompilerOptions": {
           "expectedOut": [o.path for o in _expected_outs(ctx)] if emitMetadata else [],
@@ -76,7 +76,7 @@ def _produce_metadata_only(ctx, outputs):
   transitive_dts = collect_transitive_dts(ctx)
   tsconfig_json = ctx.new_file(ctx.label.name + "_angular_metadata_tsconfig.json")
   inputs = transitive_dts.transitive_declarations + ctx.files.srcs
-  tsconfig = _ngc_tsconfig(ctx, inputs, ctx.files.srcs, AngularMetadataOutput,
+  tsconfig = _ngc_tsconfig(ctx, inputs, ctx.files.srcs, AngularMetadata,
     # These actually don't matter as the .js files are not emitted.
     target = "ES2016",
     module = "es2015",
@@ -85,7 +85,7 @@ def _produce_metadata_only(ctx, outputs):
   tsconfig["compilerOptions"]["declaration"] = False
   ctx.file_action(output=tsconfig_json, content=json_marshal(tsconfig))
   default_compile_action(ctx, inputs + [tsconfig_json], outputs, tsconfig_json.path,
-    AngularMetadataOutput,
+    AngularMetadata,
     "AngularMetadata",
     "Producing Angular metadata for %s" % ctx.label)
 
@@ -97,7 +97,7 @@ def _ng_library_impl(ctx):
     the struct returned by the call to compile_ts.
   """
   # An ng_library is a ts_library that can emit metadata.
-  metadata_files = AngularMetadataOutput(files = depset(_expected_outs(ctx)))
+  metadata_files = AngularMetadata(files = depset(_expected_outs(ctx)))
   if ctx.attr.write_ng_outputs_only:
     _produce_metadata_only(ctx, metadata_files.files)
     return struct(
