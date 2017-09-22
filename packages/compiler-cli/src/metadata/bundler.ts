@@ -8,10 +8,8 @@
 import * as path from 'path';
 import * as ts from 'typescript';
 
-import {MetadataCollector} from '../metadata/collector';
+import {MetadataCollector, validateMetadata} from '../metadata/collector';
 import {ClassMetadata, ConstructorMetadata, FunctionMetadata, MemberMetadata, MetadataEntry, MetadataError, MetadataImportedSymbolReferenceExpression, MetadataMap, MetadataObject, MetadataSymbolicExpression, MetadataSymbolicReferenceExpression, MetadataValue, MethodMetadata, ModuleExportMetadata, ModuleMetadata, VERSION, isClassMetadata, isConstructorMetadata, isFunctionMetadata, isInterfaceMetadata, isMetadataError, isMetadataGlobalReferenceExpression, isMetadataImportedSymbolReferenceExpression, isMetadataModuleReferenceExpression, isMetadataSymbolicExpression, isMethodMetadata} from '../metadata/schema';
-
-
 
 // The character set used to produce private names.
 const PRIVATE_NAME_CHARS = 'abcdefghijklmnopqrstuvwxyz';
@@ -72,6 +70,7 @@ export interface BundledModule {
 
 export interface MetadataBundlerHost {
   getMetadataFor(moduleName: string): ModuleMetadata|undefined;
+  findNode(entry: MetadataEntry): ts.Node|undefined;
 }
 
 type StaticsMetadata = {
@@ -81,6 +80,7 @@ type StaticsMetadata = {
 export class MetadataBundler {
   private symbolMap = new Map<string, Symbol>();
   private metadataCache = new Map<string, ModuleMetadata|undefined>();
+  private originalErrors = new Map<MetadataEntry, MetadataError>();
   private exports = new Map<string, Symbol[]>();
   private rootModule: string;
   private exported: Set<Symbol>;
@@ -90,7 +90,7 @@ export class MetadataBundler {
     this.rootModule = `./${path.basename(root)}`;
   }
 
-  getMetadataBundle(): BundledModule {
+  getMetadataBundle(strict: boolean): BundledModule {
     // Export the root module. This also collects the transitive closure of all values referenced by
     // the exports.
     const exportedSymbols = this.exportAll(this.rootModule);
@@ -111,7 +111,7 @@ export class MetadataBundler {
                           return p;
                         }, {});
     const exports = this.getReExports(exportedSymbols);
-    return {
+    const result: BundledModule = {
       metadata: {
         __symbolic: 'module',
         version: VERSION,
@@ -120,6 +120,18 @@ export class MetadataBundler {
       },
       privates
     };
+
+    if (strict) {
+      const that = this;
+      validateMetadata(
+          /* sourceFile */ undefined, {
+            findNode(entry: MetadataEntry): ts.Node |
+            undefined{return that.host.findNode(that.originalErrors.get(entry) || entry);}
+          },
+          result.metadata.metadata);
+    }
+
+    return result;
   }
 
   static resolveModule(importName: string, from: string): string {
@@ -461,13 +473,15 @@ export class MetadataBundler {
   }
 
   private convertError(module: string, value: MetadataError): MetadataError {
-    return {
+    const result: MetadataError = {
       __symbolic: 'error',
       message: value.message,
       line: value.line,
       character: value.character,
       context: value.context, module
     };
+    this.originalErrors.set(result, value);
+    return result;
   }
 
   private convertReference(moduleName: string, value: MetadataSymbolicReferenceExpression):
@@ -592,7 +606,7 @@ export class MetadataBundler {
 }
 
 export class CompilerHostAdapter implements MetadataBundlerHost {
-  private collector = new MetadataCollector();
+  private collector = new MetadataCollector({preserveNodeMap: true, quotedNames: true});
 
   constructor(private host: ts.CompilerHost) {}
 
@@ -600,6 +614,8 @@ export class CompilerHostAdapter implements MetadataBundlerHost {
     const sourceFile = this.host.getSourceFile(fileName + '.ts', ts.ScriptTarget.Latest);
     return this.collector.getMetadata(sourceFile);
   }
+
+  findNode(entry: MetadataEntry): ts.Node|undefined { return this.collector.findNode(entry); }
 }
 
 function resolveModule(importName: string, from: string): string {

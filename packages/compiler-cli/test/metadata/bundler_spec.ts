@@ -11,7 +11,7 @@ import * as ts from 'typescript';
 
 import {MetadataBundler, MetadataBundlerHost} from '../../src/metadata/bundler';
 import {MetadataCollector} from '../../src/metadata/collector';
-import {ClassMetadata, MetadataGlobalReferenceExpression, ModuleMetadata} from '../../src/metadata/schema';
+import {ClassMetadata, MetadataEntry, MetadataGlobalReferenceExpression, ModuleMetadata} from '../../src/metadata/schema';
 
 import {Directory, open} from './typescript.mocks';
 
@@ -20,7 +20,7 @@ describe('metadata bundler', () => {
   it('should be able to bundle a simple library', () => {
     const host = new MockStringBundlerHost('/', SIMPLE_LIBRARY);
     const bundler = new MetadataBundler('/lib/index', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     expect(Object.keys(result.metadata.metadata).sort()).toEqual([
       'ONE_CLASSES', 'One', 'OneMore', 'TWO_CLASSES', 'Two', 'TwoMore', 'ɵa', 'ɵb'
     ]);
@@ -73,7 +73,7 @@ describe('metadata bundler', () => {
       }
     });
     const bundler = new MetadataBundler('/lib/index', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     expect(Object.keys(result.metadata.metadata).sort()).toEqual([
       'ONE_CLASSES', 'One', 'OneMore', 'TWO_CLASSES', 'Two', 'TwoMore', 'ɵa', 'ɵb'
     ]);
@@ -91,7 +91,7 @@ describe('metadata bundler', () => {
       'exports': {'test.ts': `export class TestExport {}`}
     });
     const bundler = new MetadataBundler('/index', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
 
     expect(result.metadata.origins).toEqual({'TestExport': './exports/test'});
   });
@@ -113,7 +113,7 @@ describe('metadata bundler', () => {
       `
     });
     const bundler = new MetadataBundler('/index', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     // Expect the extends reference to refer to the imported module
     expect((result.metadata.metadata as any).Bar.extends.module).toEqual('foo');
     expect(result.privates).toEqual([]);
@@ -138,7 +138,7 @@ describe('metadata bundler', () => {
       `
     });
     const bundler = new MetadataBundler('/index', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     expect(Object.keys(result.metadata.metadata).sort()).toEqual(['B', 'C']);
     expect(result.privates).toEqual([]);
   });
@@ -159,7 +159,7 @@ describe('metadata bundler', () => {
       `
     });
     const bundler = new MetadataBundler('/index', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     expect(Object.keys(result.metadata.metadata).sort()).toEqual(['Foo', 'ɵa']);
     expect(result.privates).toEqual([{privateName: 'ɵa', name: 'Bar', module: './bar'}]);
   });
@@ -183,7 +183,7 @@ describe('metadata bundler', () => {
     });
 
     const bundler = new MetadataBundler('/public-api', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     expect(result.metadata.exports).toEqual([
       {from: 'external_two'}, {
         export: [{name: 'E', as: 'E'}, {name: 'F', as: 'F'}, {name: 'G', as: 'G'}],
@@ -211,7 +211,7 @@ describe('metadata bundler', () => {
     });
 
     const bundler = new MetadataBundler('/public-api', undefined, host);
-    const result = bundler.getMetadataBundle();
+    const result = bundler.getMetadataBundle(false);
     const {A, A2, A3, B1, B2} = result.metadata.metadata as{
       A: ClassMetadata,
       A2: MetadataGlobalReferenceExpression,
@@ -227,10 +227,36 @@ describe('metadata bundler', () => {
     expect(B2.__symbolic).toEqual('reference');
     expect(B2.name).toEqual('B1');
   });
+
+  it('should report invalid metadata when bundling as strict', () => {
+    const host = new MockStringBundlerHost('/', {
+      'public-api.ts': `
+        export {A as A2, A, B as B1, B as B2} from './src/core';
+        export {A as A3} from './src/alternate';
+      `,
+      'src': {
+        'core.ts': `
+          import {Injectable} from '@angular/core';
+          @Injectable()
+          export class A { constructor(l: (string | null)) {} }
+          export class B {}
+        `,
+        'alternate.ts': `
+          export class A {}
+        `,
+      }
+    });
+
+    const bundler = new MetadataBundler('/public-api', undefined, host);
+    expect(() => bundler.getMetadataBundle(true))
+        .toThrowError(`Error encountered in metadata generated for exported symbol A: 
+ /src/core.ts:4:43: Metadata collected contains an error that will be reported at runtime: Expression form not supported.
+  {"__symbolic":"error","message":"Expression form not supported","line":3,"character":42,"module":"./src/core"}`);
+  });
 });
 
 export class MockStringBundlerHost implements MetadataBundlerHost {
-  collector = new MetadataCollector();
+  collector = new MetadataCollector({preserveNodeMap: true});
 
   constructor(private dirName: string, private directory: Directory) {}
 
@@ -248,6 +274,8 @@ export class MockStringBundlerHost implements MetadataBundlerHost {
       return result;
     }
   }
+
+  findNode(entry: MetadataEntry): ts.Node|undefined { return this.collector.findNode(entry); }
 }
 
 

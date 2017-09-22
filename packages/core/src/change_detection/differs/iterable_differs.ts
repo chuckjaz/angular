@@ -172,7 +172,7 @@ export class IterableDiffers {
   static extend(factories: IterableDifferFactory[]): StaticProvider {
     return {
       provide: IterableDiffers,
-      useFactory: (parent: IterableDiffers) => {
+      useFactory: /* @dynamic */ (parent: IterableDiffers) => {
         if (!parent) {
           // Typically would occur when calling IterableDiffers.extend inside of dependencies passed
           // to

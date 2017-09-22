@@ -20,7 +20,7 @@
 
   "angularCompilerOptions": {
     "annotateForClosureCompiler": true,
-    "strictMetadataEmit": false,
+    "strictMetadataEmit": true,
     "skipTemplateCodegen": true,
     "flatModuleOutFile": "testing.js",
     "flatModuleId": "@angular/animations/browser/testing"

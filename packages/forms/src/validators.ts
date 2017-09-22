@@ -57,6 +57,7 @@ const EMAIL_REGEXP =
  * ```
  *
  * @stable
+ * @dynamic
  */
 export class Validators {
   /**

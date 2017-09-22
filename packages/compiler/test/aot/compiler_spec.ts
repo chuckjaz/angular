@@ -765,7 +765,7 @@ describe('compiler (bundled Angular)', () => {
     const indexModule = emittingHost.effectiveName('@angular/core/index');
     const bundler = new MetadataBundler(
         indexModule, '@angular/core', new MockMetadataBundlerHost(emittingHost));
-    const bundle = bundler.getMetadataBundle();
+    const bundle = bundler.getMetadataBundle(false);
     const metadata = JSON.stringify(bundle.metadata, null, ' ');
     const bundleIndexSource = privateEntriesToIndex('./index', bundle.privates);
     emittingHost.override('@angular/core/bundle_index.ts', bundleIndexSource);
@@ -800,7 +800,7 @@ describe('compiler (bundled Angular)', () => {
       const indexModule = '/bolder/public-api';
       const bundler =
           new MetadataBundler(indexModule, 'bolder', new MockMetadataBundlerHost(emittingHost));
-      const bundle = bundler.getMetadataBundle();
+      const bundle = bundler.getMetadataBundle(false);
       const metadata = JSON.stringify(bundle.metadata, null, ' ');
       const bundleIndexSource = privateEntriesToIndex('./public-api', bundle.privates);
       emittingHost.override('/bolder/index.ts', bundleIndexSource);

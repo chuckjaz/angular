@@ -189,6 +189,7 @@ export interface NgModule {
  *
  * @stable
  * @Annotation
+ * @dynamic
  */
 export const NgModule: NgModuleDecorator =
     makeDecorator('NgModule', (ngModule: NgModule) => ngModule);

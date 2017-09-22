@@ -57,6 +57,7 @@ export interface Inject { token: any; }
  *
  * @stable
  * @Annotation
+ * @dynamic
  */
 export const Inject: InjectDecorator = makeParamDecorator('Inject', (token: any) => ({token}));
 

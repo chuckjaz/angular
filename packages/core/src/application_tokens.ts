@@ -22,6 +22,7 @@ import {ComponentRef} from './linker/component_factory';
  */
 export const APP_ID = new InjectionToken<string>('AppId');
 
+// @dynamic
 export function _appIdRandomProviderFactory() {
   return `${_randomChar()}${_randomChar()}${_randomChar()}`;
 }

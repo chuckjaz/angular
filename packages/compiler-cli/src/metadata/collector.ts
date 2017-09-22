@@ -38,12 +38,20 @@ export interface CollectorOptions {
    * An expression substitution callback.
    */
   substituteExpression?: (value: MetadataValue, node: ts.Node) => MetadataValue;
+
+  /**
+   * Preserve the node map across calls to getMetadata() to allow mapping metadata back to the
+   * genrating node.
+   */
+  preserveNodeMap?: boolean;
 }
 
 /**
  * Collect decorator metadata from a TypeScript module.
  */
 export class MetadataCollector {
+  private nodeMap: Map<MetadataEntry, ts.Node>|undefined;
+
   constructor(private options: CollectorOptions = {}) {}
 
   /**
@@ -55,8 +63,10 @@ export class MetadataCollector {
       substituteExpression?: (value: MetadataValue, node: ts.Node) => MetadataValue): ModuleMetadata
       |undefined {
     const locals = new Symbols(sourceFile);
-    const nodeMap =
-        new Map<MetadataValue|ClassMetadata|InterfaceMetadata|FunctionMetadata, ts.Node>();
+    const nodeMap = this.nodeMap || new Map<MetadataEntry, ts.Node>();
+    if (this.options.preserveNodeMap) {
+      this.nodeMap = nodeMap;
+    }
     const composedSubstituter = substituteExpression && this.options.substituteExpression ?
         (value: MetadataValue, node: ts.Node) =>
             this.options.substituteExpression !(substituteExpression(value, node), node) :
@@ -130,7 +140,7 @@ export class MetadataCollector {
             isMetadataSymbolicSelectExpression(result)) {
           return result;
         } else {
-          return errorSym('Symbol reference expected', node);
+          return recordEntry(errorSym('Symbol reference expected', node), node);
         }
       }
 
@@ -232,7 +242,9 @@ export class MetadataCollector {
                   const value = evaluator.evaluateNode(property.initializer);
                   recordStaticMember(name, value);
                 } else {
-                  recordStaticMember(name, errorSym('Variable not initialized', property.name));
+                  recordStaticMember(
+                      name,
+                      recordEntry(errorSym('Variable not initialized', property.name), property));
                 }
               }
             }
@@ -302,7 +314,9 @@ export class MetadataCollector {
                   className, {__symbolic: 'reference', name: exportedName(classDeclaration)});
             } else {
               locals.define(
-                  className, errorSym('Reference to non-exported class', node, {className}));
+                  className,
+                  recordEntry(
+                      errorSym('Reference to non-exported class', node, {className}), node));
             }
           }
           break;
@@ -324,8 +338,10 @@ export class MetadataCollector {
             if (nameNode && nameNode.text) {
               locals.define(
                   nameNode.text,
-                  errorSym(
-                      'Reference to a non-exported function', nameNode, {name: nameNode.text}));
+                  recordEntry(
+                      errorSym(
+                          'Reference to a non-exported function', nameNode, {name: nameNode.text}),
+                      nameNode));
             }
           }
           break;
@@ -516,7 +532,8 @@ export class MetadataCollector {
                 switch (nameNode.kind) {
                   case ts.SyntaxKind.Identifier:
                     const name = <ts.Identifier>nameNode;
-                    const varValue = errorSym('Destructuring not supported', name);
+                    const varValue =
+                        recordEntry(errorSym('Destructuring not supported', name), nameNode);
                     locals.define(name.text, varValue);
                     if (isExport(node)) {
                       if (!metadata) metadata = {};
@@ -545,7 +562,8 @@ export class MetadataCollector {
       if (!metadata)
         metadata = {};
       else if (strict) {
-        validateMetadata(sourceFile, nodeMap, metadata);
+        validateMetadata(
+            sourceFile, {findNode(entry: MetadataEntry) { return nodeMap.get(entry); }}, metadata);
       }
       const result: ModuleMetadata = {
         __symbolic: 'module',
@@ -555,11 +573,17 @@ export class MetadataCollector {
       return result;
     }
   }
+
+  public findNode(entry: MetadataEntry): ts.Node|undefined {
+    return this.nodeMap && this.nodeMap.get(entry);
+  }
 }
 
+export interface NodeFinder { findNode(entry: MetadataEntry): ts.Node|undefined; }
+
 // This will throw if the metadata entry given contains an error node.
-function validateMetadata(
-    sourceFile: ts.SourceFile, nodeMap: Map<MetadataEntry, ts.Node>,
+export function validateMetadata(
+    sourceFile: ts.SourceFile | undefined, nodeFinder: NodeFinder,
     metadata: {[name: string]: MetadataEntry}) {
   let locals: Set<string> = new Set(['Array', 'Object', 'Set', 'Map', 'string', 'number', 'any']);
 
@@ -631,7 +655,15 @@ function validateMetadata(
     }
     // Only validate parameters of classes for which we know that are used with our DI
     if (classData.decorators && isConstructorMetadata(member) && member.parameters) {
-      member.parameters.forEach(validateExpression);
+      member.parameters.forEach((expression, index) => {
+        if (isMethodMetadata(member) && member.parameterDecorators &&
+            member.parameterDecorators[index]) {
+          // Ignore the expression when there are decorators present as the decorator most likely
+          // is an @Inject which means this expression will not be used.
+          return;
+        }
+        validateExpression(expression);
+      });
     }
   }
 
@@ -668,25 +700,37 @@ function validateMetadata(
     }
   }
 
-  function shouldReportNode(node: ts.Node | undefined) {
-    if (node) {
-      const nodeStart = node.getStart();
-      return !(
-          node.pos != nodeStart &&
-          sourceFile.text.substring(node.pos, nodeStart).indexOf('@dynamic') >= 0);
-    }
-    return true;
+  function findSourceFile(node: ts.Node): ts.SourceFile|undefined {
+    return sourceFile || (node.kind == ts.SyntaxKind.SourceFile && (node as ts.SourceFile)) ||
+        (node.parent && findSourceFile(node.parent));
   }
 
+  function isDynamic(node: ts.Node): boolean {
+    const nodeStart = node.getStart();
+    const sourceFile = findSourceFile(node);
+    return !!sourceFile &&
+        ((node.pos != nodeStart &&
+          sourceFile.text.substring(node.pos, nodeStart).indexOf('@dynamic') >= 0) ||
+         (!!node.parent && isDynamic(node.parent)));
+  }
+
+  function shouldReportNode(node: ts.Node | undefined) { return !node || !isDynamic(node); }
+
   function reportError(error: MetadataError) {
-    const node = nodeMap.get(error);
+    const node = nodeFinder.findNode(error);
     if (shouldReportNode(node)) {
       const lineInfo = error.line != undefined ?
           error.character != undefined ? `:${error.line + 1}:${error.character + 1}` :
                                          `:${error.line + 1}` :
           '';
-      throw new Error(
-          `${sourceFile.fileName}${lineInfo}: Metadata collected contains an error that will be reported at runtime: ${expandedMessage(error)}.\n  ${JSON.stringify(error)}`);
+      const source = sourceFile || (node && findSourceFile(node));
+      if (source) {
+        throw new Error(
+            `${source.fileName}${lineInfo}: Metadata collected contains an error that will be reported at runtime: ${expandedMessage(error)}.\n  ${JSON.stringify(error)}`);
+      } else {
+        throw new Error(
+            `Metadata collected contains an error that will be reported at runtime: ${expandedMessage(error)}.\n  ${JSON.stringify(error)}`);
+      }
     }
   }
 
@@ -697,12 +741,15 @@ function validateMetadata(
         validateClass(entry);
       }
     } catch (e) {
-      const node = nodeMap.get(entry);
+      const node = nodeFinder.findNode(entry);
       if (shouldReportNode(node)) {
         if (node) {
-          const {line, character} = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-          throw new Error(
-              `${sourceFile.fileName}:${line + 1}:${character + 1}: Error encountered in metadata generated for exported symbol '${name}': \n ${e.message}`);
+          const source = findSourceFile(node);
+          if (source) {
+            const {line, character} = source.getLineAndCharacterOfPosition(node.getStart());
+            throw new Error(
+                `${source.fileName}:${line + 1}:${character + 1}: Error encountered in metadata generated for exported symbol '${name}': \n ${e.message}`);
+          }
         }
         throw new Error(
             `Error encountered in metadata generated for exported symbol ${name}: \n ${e.message}`);

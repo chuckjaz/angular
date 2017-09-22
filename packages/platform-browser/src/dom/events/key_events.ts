@@ -23,6 +23,7 @@ const MODIFIER_KEY_GETTERS: {[key: string]: (event: KeyboardEvent) => boolean} =
 
 /**
  * @experimental
+ * @dynamic
  */
 @Injectable()
 export class KeyEventsPlugin extends EventManagerPlugin {

@@ -17,7 +17,7 @@
 
   "angularCompilerOptions": {
     "annotateForClosureCompiler": true,
-    "strictMetadataEmit": false,
+    "strictMetadataEmit": true,
     "skipTemplateCodegen": true,
     "flatModuleOutFile": "common.js",
     "flatModuleId": "@angular/common"

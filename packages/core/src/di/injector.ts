@@ -48,7 +48,7 @@ class _NullInjector implements Injector {
  */
 export abstract class Injector {
   static THROW_IF_NOT_FOUND = _THROW_IF_NOT_FOUND;
-  static NULL: Injector = new _NullInjector();
+  static NULL: Injector = /* @dynamic */ new _NullInjector();
 
   /**
    * Retrieves an instance from the injector based on the provided token.

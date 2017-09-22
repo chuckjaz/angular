@@ -78,7 +78,7 @@ export function createBundleIndexHost<H extends ts.CompilerHost>(
   const indexModule = file.replace(/\.ts$/, '');
   const bundler =
       new MetadataBundler(indexModule, ngOptions.flatModuleId, new CompilerHostAdapter(host));
-  const metadataBundle = bundler.getMetadataBundle();
+  const metadataBundle = bundler.getMetadataBundle(!!ngOptions.strictMetadataEmit);
   const metadata = JSON.stringify(metadataBundle.metadata);
   const name =
       path.join(path.dirname(indexModule), ngOptions.flatModuleOutFile !.replace(JS_EXT, '.ts'));

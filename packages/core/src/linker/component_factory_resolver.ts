@@ -37,7 +37,7 @@ class _NullComponentFactoryResolver implements ComponentFactoryResolver {
  * @stable
  */
 export abstract class ComponentFactoryResolver {
-  static NULL: ComponentFactoryResolver = new _NullComponentFactoryResolver();
+  static NULL: ComponentFactoryResolver = /* @dynamic */ new _NullComponentFactoryResolver();
   abstract resolveComponentFactory<T>(component: Type<T>): ComponentFactory<T>;
 }
 

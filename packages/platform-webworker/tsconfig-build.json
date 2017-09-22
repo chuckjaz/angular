@@ -19,7 +19,7 @@
 
   "angularCompilerOptions": {
     "annotateForClosureCompiler": true,
-    "strictMetadataEmit": false,
+    "strictMetadataEmit": true,
     "skipTemplateCodegen": true,
     "flatModuleOutFile": "platform-webworker.js",
     "flatModuleId": "@angular/platform-webworker"

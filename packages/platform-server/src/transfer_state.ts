@@ -11,6 +11,7 @@ import {DOCUMENT, TransferState, ɵescapeHtml as escapeHtml} from '@angular/plat
 
 import {BEFORE_APP_SERIALIZED} from './tokens';
 
+// @dynamic
 export function serializeTransferStateFactory(
     doc: Document, appId: string, transferStore: TransferState) {
   return () => {

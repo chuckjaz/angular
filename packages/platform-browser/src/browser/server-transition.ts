@@ -17,6 +17,7 @@ import {DOCUMENT} from '../dom/dom_tokens';
  */
 export const TRANSITION_ID = new InjectionToken('TRANSITION_ID');
 
+// @dynamic
 export function appInitializerFactory(transitionId: string, document: any, injector: Injector) {
   return () => {
     // Wait for all application initializers to be completed before removing the styles set by

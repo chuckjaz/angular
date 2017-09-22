@@ -9,7 +9,7 @@
 import {AotCompilerHost, AotCompilerOptions, GeneratedFile, createAotCompiler, toTypeScript} from '@angular/compiler';
 import {MetadataBundlerHost} from '@angular/compiler-cli/src/metadata/bundler';
 import {MetadataCollector} from '@angular/compiler-cli/src/metadata/collector';
-import {ModuleMetadata} from '@angular/compiler-cli/src/metadata/index';
+import {MetadataEntry, ModuleMetadata} from '@angular/compiler-cli/src/metadata/index';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
@@ -424,7 +424,7 @@ export class MockAotCompilerHost implements AotCompilerHost {
 }
 
 export class MockMetadataBundlerHost implements MetadataBundlerHost {
-  private collector = new MetadataCollector();
+  private collector = new MetadataCollector({preserveNodeMap: true});
 
   constructor(private host: ts.CompilerHost) {}
 
@@ -432,6 +432,8 @@ export class MockMetadataBundlerHost implements MetadataBundlerHost {
     const source = this.host.getSourceFile(moduleName + '.ts', ts.ScriptTarget.Latest);
     return this.collector.getMetadata(source);
   }
+
+  findNode(entry: MetadataEntry): ts.Node|undefined { return this.collector.findNode(entry); }
 }
 
 function find(fileName: string, data: MockFileOrDirectory | undefined): MockFileOrDirectory|

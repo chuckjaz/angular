@@ -152,7 +152,7 @@ export class KeyValueDiffers {
   static extend<S>(factories: KeyValueDifferFactory[]): StaticProvider {
     return {
       provide: KeyValueDiffers,
-      useFactory: (parent: KeyValueDiffers) => {
+      useFactory: /* @dynamic */ (parent: KeyValueDiffers) => {
         if (!parent) {
           // Typically would occur when calling KeyValueDiffers.extend inside of dependencies passed
           // to bootstrap(), which would override default pipes instead of extending them.

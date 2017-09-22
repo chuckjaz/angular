@@ -31,6 +31,7 @@ export function serializeDocument(doc: Document): string {
 
 /**
  * DOM Adapter for the server platform based on https://github.com/fgnass/domino.
+ * @dynamic
  */
 export class DominoAdapter extends BrowserDomAdapter {
   static makeCurrent() { setRootDomAdapter(new DominoAdapter()); }

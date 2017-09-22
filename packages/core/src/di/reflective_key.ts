@@ -47,6 +47,7 @@ export class ReflectiveKey {
 
   /**
    * @returns the number of keys registered in the system.
+   * @dynamic
    */
   static get numberOfKeys(): number { return _globalKeyRegistry.numberOfKeys; }
 }

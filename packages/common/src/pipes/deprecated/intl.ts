@@ -215,6 +215,7 @@ function partToTime(part: string): string {
 }
 
 export class DateFormatter {
+  // @dynamic
   static format(date: Date, locale: string, pattern: string): string {
     return dateFormatter(pattern, date, locale);
   }

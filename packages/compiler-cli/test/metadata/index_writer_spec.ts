@@ -16,7 +16,7 @@ describe('index_writer', () => {
   it('should be able to write the index of a simple library', () => {
     const host = new MockStringBundlerHost('/', SIMPLE_LIBRARY);
     const bundler = new MetadataBundler('/lib/index', undefined, host);
-    const bundle = bundler.getMetadataBundle();
+    const bundle = bundler.getMetadataBundle(false);
     const result = privateEntriesToIndex('./index', bundle.privates);
     expect(result).toContain(`export * from './index';`);
     expect(result).toContain(`export {PrivateOne as ɵa} from './src/one';`);
