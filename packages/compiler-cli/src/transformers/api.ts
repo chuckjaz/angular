@@ -89,6 +89,10 @@ export interface CompilerOptions extends ts.CompilerOptions {
   // meaningful when `flatModuleOutFile` is also supplied. It is otherwise ignored.
   flatModuleId?: string;
 
+  flatModuleIndex?: string[];
+
+  angularOnlyCompile?: boolean;
+
   // Whether to generate code for library code.
   // If true, produce .ngfactory.ts and .ngstyle.ts files for .d.ts inputs.
   // Default is true.

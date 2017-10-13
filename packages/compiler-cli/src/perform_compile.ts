@@ -14,6 +14,7 @@ import * as ts from 'typescript';
 import * as api from './transformers/api';
 import * as ng from './transformers/entry_points';
 import {createMessageDiagnostic} from './transformers/util';
+import {createBundleIndexHost} from './metadata/bundle_index_host'
 
 const TS_EXT = /\.ts$/;
 
@@ -157,6 +158,54 @@ export function performCompilation({rootNames, options, host, oldProgram, emitCa
       host = ng.createCompilerHost({options});
     }
 
+    if (options.angularFilesOnly && options.flatModuleOutFile && options.flatModuleIndex) {
+      // Special case for just generating the flat module index
+      let indexNames = rootNames;
+      const rootDir = options.rootDir;
+      if (!rootDir) {
+        return {
+          diagnostics: [
+            {
+              category: ts.DiagnosticCategory.Error,
+              messageText: 'Angular option "flatModuleIndex" requires compiler option "rootDir" to be set',
+              code: api.UNKNOWN_ERROR_CODE,
+              source: api.SOURCE
+            }
+          ]
+        };
+      } else {
+        indexNames = normalizeNames(options.flatModuleIndex, rootDir);
+      }
+
+      const {host: bundleHost, indexName, errors} =  createBundleIndexHost(options, indexNames, host);
+
+      if (!indexName) {
+        return {
+          diagnostics: [
+            {
+              category: ts.DiagnosticCategory.Error,
+              messageText: 'Could not determine the flat module index name',
+              code: api.UNKNOWN_ERROR_CODE,
+              source: api.SOURCE
+            }
+          ]
+        }
+      }
+
+      // By-pass the normal process and go directly to the emit, filtering just for the
+      // files we need.
+      const program = ts.createProgram([indexName], options, bundleHost);
+      const sourceFile = program.getSourceFile(indexName);
+      let diagnostics = program.getSyntacticDiagnostics(sourceFile);
+      if (!diagnostics.length) {
+        diagnostics = program.getSemanticDiagnostics(sourceFile);
+      }
+      if (!diagnostics.length) {
+        program.emit(sourceFile);
+      }
+      return { diagnostics };
+    }
+
     program = ng.createProgram({rootNames, host, options, oldProgram});
 
     const beforeDiags = Date.now();
@@ -226,4 +275,8 @@ function defaultGatherDiagnostics(program: api.Program): Diagnostics {
 
 function hasErrors(diags: Diagnostics) {
   return diags.some(d => d.category === ts.DiagnosticCategory.Error);
+}
+
+function normalizeNames(names: string[], basePath: string): string[] {
+  return names.map(n => path.normalize(path.join(basePath, n)));
 }

@@ -10,7 +10,6 @@ load(":rules_typescript.bzl",
     "compile_ts",
     "DEPS_ASPECTS",
     "ts_providers_dict_to_struct",
-    "json_marshal",
 )
 
 # Calculate the expected output of the template compiler for every source in
@@ -197,7 +196,7 @@ def ng_module_impl(ctx, ts_compile_actions):
   #providers["typescript"]["transitive_declarations"] += addl_declarations
   outs = _expected_outs(ctx, ctx.label)
   providers["angular"] = {
-    "summaries": _expected_outs(ctx, ctx.label).summaries
+    "summaries": outs.summaries
   }
   providers["ngc_messages"] = outs.i18n_messages
 

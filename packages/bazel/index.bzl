@@ -7,3 +7,5 @@ Users should not load files under "/src"
 """
 
 load("//src:ng_module.bzl", "ng_module")
+load("//src:ng_library.bzl", "ng_library", "ModuleId")
+load("//src:ng_entry_point.bzl", "ng_entry_point")

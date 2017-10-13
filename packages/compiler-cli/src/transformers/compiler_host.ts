@@ -21,6 +21,10 @@ const NODE_MODULES_PACKAGE_NAME = /node_modules\/((\w|-)+|(@(\w|-)+\/(\w|-)+))/;
 const DTS = /\.d\.ts$/;
 const EXT = /(\.ts|\.d\.ts|\.js|\.jsx|\.tsx)$/;
 
+// Special cases for resolving symbols when compiling @angular/core. These must match the build structure.
+const CORE_PATH_SEGMENT = 'packages/core/';
+const CORE_API_MODULE = 'public_api';
+
 export function createCompilerHost(
     {options, tsHost = ts.createCompilerHost(options, true)}:
         {options: CompilerOptions, tsHost?: ts.CompilerHost}): CompilerHost {
@@ -107,10 +111,25 @@ export class TsCompilerAotCompilerTypeCheckHostAdapter extends
 
   private resolveModuleName(moduleName: string, containingFile: string): ts.ResolvedModule
       |undefined {
-    const rm = ts.resolveModuleName(
-                     moduleName, containingFile.replace(/\\/g, '/'), this.options, this,
+    const normalContainingFile = containingFile.replace(/\\/g, '/');
+    let rm = ts.resolveModuleName(
+                     moduleName, normalContainingFile, this.options, this,
                      this.moduleResolutionCache)
                    .resolvedModule;
+    if (!rm && moduleName == '@angular/core') {
+      // Special case for compiling @angular/core itself.
+      const packagesCoreIndex = normalContainingFile.lastIndexOf(CORE_PATH_SEGMENT);
+      if (packagesCoreIndex > 0) {
+        const corePackagesPath = normalContainingFile.substr(0, packagesCoreIndex + CORE_PATH_SEGMENT.length);
+        const publicApiPath = corePackagesPath + CORE_API_MODULE;
+        let relativeName = path.relative(path.dirname(normalContainingFile), publicApiPath);
+        if (relativeName === CORE_API_MODULE) {
+          // path.relative() does not follow module convention so add the './' when it is in the same directory.
+          relativeName = './' + CORE_API_MODULE;
+        }
+        rm = ts.resolveModuleName(relativeName, normalContainingFile, this.options, this, this.moduleResolutionCache).resolvedModule;
+      }
+    }
     if (rm && this.isSourceFile(rm.resolvedFileName)) {
       // Case: generateCodeForLibraries = true and moduleName is
       // a .d.ts file in a node_modules folder.
