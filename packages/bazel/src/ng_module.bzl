@@ -218,6 +218,12 @@ NG_MODULE_ATTRIBUTES = {
 
     "no_i18n": attr.bool(default = False),
 
+    "flatten": attr.bool(default = False),
+
+    "entry_point": attr.label(allow_single_file = FileType([".ts"])),
+
+    "rollup_config": attr.label(allow_single_file = FileType([".js"])),
+
     "compiler": attr.label(
         default = Label("//src/ngc-wrapped"),
         executable = True,

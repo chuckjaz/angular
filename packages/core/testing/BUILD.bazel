@@ -1,0 +1,16 @@
+package(default_visibility=["//visibility:public"])
+
+load("@angular//:index.bzl", "ng_module", "ng_package")
+
+ng_module(
+  name = "testing",
+  srcs = glob(["**/*.ts"]),
+  deps = [
+    "//packages/core"
+  ],
+  module_name = "@angular/core/testing",
+  tsconfig = ":tsconfig-build.json",
+  flatten = True,
+  entry_point = ":public_api.ts",
+  rollup_config = ":rollup.config.js"
+)

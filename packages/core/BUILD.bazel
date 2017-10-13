@@ -1,22 +1,25 @@
 package(default_visibility=["//visibility:public"])
 
-load("@angular//:index.bzl", "ng_library", "ng_entry_point")
+load("@angular//:index.bzl", "ng_module", "ng_package")
 
-ng_library(
+ng_module(
   name = "core",
   srcs = glob(["**/*.ts"], exclude=[
-      "index.ts",
       "test/**",
       "testing/**",
   ]),
   module_name = "@angular/core",
   tsconfig = ":tsconfig-build.json",
+  flatten = True,
+  entry_point = ":public_api.ts",
+  rollup_config = ":rollup.config.js"
 )
 
-ng_entry_point(
-  name = "entry_point",
-  srcs = [":core"],
-  index = ":index.ts",
-  apis = ":public_api.ts",
-  rollup_config = ":rollup.config.js",
+ng_package(
+  name = "package",
+  srcs = [
+    ":core", 
+    "//packages/core/testing",
+  ],
+  json = ":package.json",
 )
