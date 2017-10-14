@@ -6,6 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {} from 'jasmine';
 import {ɵisPromise as isPromise} from '@angular/core';
 import {global} from '@angular/core/src/util';
 

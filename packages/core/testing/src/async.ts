@@ -6,6 +6,8 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
+import {} from 'zone.js';
+
 declare var global: any;
 
 const _global = <any>(typeof window === 'undefined' ? global : window);
