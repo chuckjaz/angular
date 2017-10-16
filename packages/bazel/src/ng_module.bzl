@@ -12,6 +12,46 @@ load(":rules_typescript.bzl",
     "ts_providers_dict_to_struct",
 )
 
+AngularEntryPoint = provider()
+
+def _flat_module_info(ctx, label):
+  if not hasattr(ctx.attr, "module_name"):
+    fail("The flat module %s requires module_name attribute" % label)
+  module_id = ctx.attr.module_name
+
+  # Calculate index files
+  index_name = "index"
+  if hasattr(ctx.file, "index"):
+    index = ctx.file.index
+    index_name = index.basename[:index.basename.rfind(".")]
+
+  index_js_file = ctx.new_file(ctx.bin_dir, index_name + ".js")
+  index_closure_js_file = ctx.new_file(ctx.bin_dir, index_name + ".closure.js")
+  index_dts_file = ctx.new_file(ctx.bin_dir, index_name + ".d.ts")
+  index_metadata_file = ctx.new_file(ctx.bin_dir, index_name + ".metadata.json")
+
+  # Determine the entry point
+  if not hasattr(ctx.file, "entry_point"):
+    fail("The flat module %s requires an entry_point attribute" % label)
+  entry_point = ctx.file.entry_point
+  entry_point_name = entry_point.path[:entry_point.path.rfind(".")]
+
+  rollup_config = None
+  if hasattr(ctx, "rollup_config"):
+    rollup_config = ctx.file.rollup_config
+
+  return struct(
+    module_id = module_id,
+    index_name = index_name,
+    index_js_file = index_js_file,
+    index_closure_js_file = index_closure_js_file,
+    index_dts_file = index_dts_file,
+    index_metadata_file = index_metadata_file,
+    entry_point = entry_point,
+    entry_point_name = entry_point_name,
+    rollup_config = rollup_config,
+  )
+
 # Calculate the expected output of the template compiler for every source in
 # in the library. Most of these will be produced as empty files but it is
 # unknown, without parsing, which will be empty.
@@ -20,6 +60,7 @@ def _expected_outs(ctx, label):
   closure_js_files = []
   declaration_files = []
   summary_files = []
+  metadata_files = []
 
   codegen_inputs = ctx.files.srcs
 
@@ -51,12 +92,20 @@ def _expected_outs(ctx, label):
 
   i18n_messages_files = [ctx.new_file(ctx.bin_dir, ctx.label.name + "_ngc_messages.xmb")]
 
+  if ctx.attr.flatten:
+    flat_module_info = _flat_module_info(ctx, label)
+    devmode_js_files += [flat_module_info.index_js_file]
+    closure_js_files += [flat_module_info.index_closure_js_file]
+    declaration_files += [flat_module_info.index_dts_file]
+    metadata_files += [flat_module_info.index_metadata_file]
+
   return struct(
     closure_js = closure_js_files,
     devmode_js = devmode_js_files,
     declarations = declaration_files,
     summaries = summary_files,
     i18n_messages = i18n_messages_files,
+    metadata_files = metadata_files,
   )
 
 def _ngc_tsconfig(ctx, files, srcs, **kwargs):
@@ -64,7 +113,15 @@ def _ngc_tsconfig(ctx, files, srcs, **kwargs):
   if "devmode_manifest" in kwargs:
     expected_outs = outs.devmode_js + outs.declarations + outs.summaries
   else:
-    expected_outs = outs.closure_js
+    expected_outs = outs.closure_js + outs.metadata_files
+  optional_options = {}
+  if ctx.attr.flatten:
+    flat_module_info = _flat_module_info(ctx, ctx.label)
+    optional_options = {
+      "flatModuleOutFile": flat_module_info.index_name,
+      "flatModuleId": flat_module_info.module_id,
+      "flatModuleIndex": [flat_module_info.entry_point_name]
+    }
 
   return dict(tsc_wrapped_tsconfig(ctx, files, srcs, **kwargs), **{
       "angularCompilerOptions": {
@@ -178,11 +235,14 @@ def _compile_action(ctx, inputs, outputs, messages_out, config_file_path):
 
 def _prodmode_compile_action(ctx, inputs, outputs, config_file_path):
   outs = _expected_outs(ctx, ctx.label)
-  return _compile_action(ctx, inputs, outputs + outs.closure_js, outs.i18n_messages, config_file_path)
+  return _compile_action(ctx, inputs, outputs + outs.closure_js + outs.metadata_files, outs.i18n_messages, config_file_path)
 
 def _devmode_compile_action(ctx, inputs, outputs, config_file_path):
   outs = _expected_outs(ctx, ctx.label)
   _compile_action(ctx, inputs, outputs + outs.devmode_js + outs.declarations + outs.summaries, None, config_file_path)
+
+def _add_providers(result, providers):
+  result["providers"] = result["providers"] + providers if "providers" in result else providers
 
 def ng_module_impl(ctx, ts_compile_actions):
   providers = ts_compile_actions(
@@ -199,6 +259,21 @@ def ng_module_impl(ctx, ts_compile_actions):
     "summaries": outs.summaries
   }
   providers["ngc_messages"] = outs.i18n_messages
+
+  if ctx.attr.flatten:
+    flat_module_info = _flat_module_info(ctx, ctx.label)
+
+    # Add an AngularEntryPoint provider
+    _add_providers(providers, [AngularEntryPoint(
+      module_id = flat_module_info.module_id,
+      index_js_file = flat_module_info.index_closure_js_file,
+      index_dts_file = flat_module_info.index_dts_file,
+      index_metadata_file = flat_module_info.index_metadata_file,
+      esm_es2016_files = depset(providers["typescript"]["es6_sources"]),
+      esm_es2015_files = depset(providers["typescript"]["es5_sources"]),
+      dts_files = depset(providers["typescript"]["transitive_declarations"]),
+      rollup_config = flat_module_info.rollup_config
+    )])
 
   return providers
 

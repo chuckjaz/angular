@@ -6,5 +6,5 @@
 Users should not load files under "/src"
 """
 
-load("//src:ng_module.bzl", "ng_module")
+load("//src:ng_module.bzl", "ng_module", "AngularEntryPoint")
 load("//src:ng_package.bzl", "ng_package")

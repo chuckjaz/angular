@@ -19,7 +19,6 @@ ng_package(
   name = "package",
   srcs = [
     ":core", 
-    "//packages/core/testing",
   ],
   json = ":package.json",
 )
