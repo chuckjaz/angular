@@ -8,6 +8,10 @@
 import * as chars from './chars';
 import {CompileIdentifierMetadata, identifierModuleUrl, identifierName} from './compile_metadata';
 
+export function error(msg: string): never {
+  throw new Error(`Internal error: ${msg}`);
+}
+
 export class ParseLocation {
   constructor(
       public file: ParseSourceFile, public offset: number, public line: number,
