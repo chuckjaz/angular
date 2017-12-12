@@ -686,6 +686,7 @@ function getAotCompilerOptions(options: CompilerOptions): AotCompilerOptions {
     enableSummariesForJit: options.enableSummariesForJit,
     preserveWhitespaces: options.preserveWhitespaces,
     fullTemplateTypeCheck: options.fullTemplateTypeCheck,
+    hostBindingTypeCheck: options.hostBindingTypeCheck,
     allowEmptyCodegenFiles: options.allowEmptyCodegenFiles,
   };
 }

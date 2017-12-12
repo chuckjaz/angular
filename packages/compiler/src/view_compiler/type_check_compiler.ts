@@ -266,7 +266,7 @@ class ViewBuilder implements TemplateAstVisitor, LocalResolver {
     // Note: The old view compiler used to use an `any` type
     // for expressions in host properties / events.
     // We keep this behaivor behind a flag for now.
-    if (this.options.fullTemplateTypeCheck) {
+    if (this.options.fullTemplateTypeCheck && this.options.hostBindingTypeCheck) {
       dirAst.hostProperties.forEach(
           (inputAst) => this.updates.push(
               {context: dirType, value: inputAst.value, sourceSpan: inputAst.sourceSpan}));

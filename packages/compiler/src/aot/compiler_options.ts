@@ -17,6 +17,7 @@ export interface AotCompilerOptions {
   enableSummariesForJit?: boolean;
   preserveWhitespaces?: boolean;
   fullTemplateTypeCheck?: boolean;
+  hostBindingTypeCheck?: boolean;
   allowEmptyCodegenFiles?: boolean;
   strictInjectionParameters?: boolean;
 }

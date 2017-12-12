@@ -322,6 +322,78 @@ describe('ng type checker', () => {
     });
   });
 
+  describe('host bindings', () => {
+    const a = (files: MockFiles, options: object = {}) => {
+      accept(
+          {'src/app.component.ts': '', 'src/lib.ts': '', ...files},
+          {fullTemplateTypeCheck: true, ...options});
+    };
+
+    const r =
+        (message: string | RegExp, location: RegExp | null, files: MockFiles,
+         options: object = {}) => {
+          reject(
+              message, location, {'src/app.component.ts': '', 'src/lib.ts': '', ...files},
+              {fullTemplateTypeCheck: true, ...options});
+        };
+    it('should reject an invalid host binding with hostBindingTypeCheck true', () => {
+      r(/Property 'handleInput' is private/, null,
+        {
+        'src/app.module.ts': `
+
+          import {NgModule, Component, Directive} from '@angular/core';
+
+          @Directive({
+            selector: '[myDir]',
+            host: { '(input)': 'handleInput($event.target.value)' }
+          })
+          export class MyDir {
+            private handleInput(value: any) {}
+          }
+
+          @Component({
+            selector: 'comp',
+            template: '<div myDir></div>'
+          })
+          export class MainComp {}
+
+          @NgModule({
+            declarations: [MainComp, MyDir],
+          })
+          export class MainModule { }
+        `
+        }, {hostBindingTypeCheck: true})
+    });
+
+    it('should accept an invalid host binding with hostBindingTypeCheck false', () => {
+      a({
+      'src/app.module.ts': `
+
+        import {NgModule, Component, Directive} from '@angular/core';
+
+        @Directive({
+          selector: '[myDir]',
+          host: { '(input)': 'handleInput($event.target.value)' }
+        })
+        export class MyDir {
+          private handleInput(value: any) {}
+        }
+
+        @Component({
+          selector: 'comp',
+          template: '<div myDir></div>'
+        })
+        export class MainComp {}
+
+        @NgModule({
+          declarations: [MainComp, MyDir],
+        })
+        export class MainModule { }
+      `
+      }, {hostBindingTypeCheck: false})
+    });
+  });
+
   describe('regressions ', () => {
     const a = (files: MockFiles, options: object = {}) => {
       accept(files, {fullTemplateTypeCheck: true, ...options});

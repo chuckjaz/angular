@@ -106,6 +106,10 @@ export interface CompilerOptions extends ts.CompilerOptions {
   // This will be true be default in Angular 6.
   fullTemplateTypeCheck?: boolean;
 
+  // Whether to enable testing host bindings when they are used in a template.
+  // Default is false. Only meaninful when fullTemplateTypeCheck is also enabled.
+  hostBindingTypeCheck?: boolean;
+
   // Insert JSDoc type annotations needed by Closure Compiler
   annotateForClosureCompiler?: boolean;
 
