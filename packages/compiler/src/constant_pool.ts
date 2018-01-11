@@ -43,19 +43,24 @@ export class ConstantPool {
 
   private nextNameIndex = 0;
 
-  getConstLiteral(literal: o.Expression): o.Expression {
+  getConstLiteral(literal: o.Expression, forceShared?: boolean): o.Expression {
     const key = this.keyOf(literal);
     let fixup = this.literals.get(key);
+    let newValue = false;
     if (!fixup) {
       fixup = new FixupExpression(literal);
       this.literals.set(key, fixup);
-    } else if (!fixup.shared) {
+      newValue = true;
+    }
+
+    if ((!newValue && !fixup.shared) || (newValue && forceShared)) {
       // Replace the expression with a variable
       const name = this.freshName();
       this.statements.push(
           o.variable(name).set(literal).toDeclStmt(o.INFERRED_TYPE, [o.StmtModifier.Final]));
       fixup.fixup(o.variable(name));
     }
+
     return fixup;
   }
 

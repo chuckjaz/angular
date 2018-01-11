@@ -54,8 +54,10 @@ export function compileComponent(
     if (selectorAttributes.length) {
       definitionMapValues.push({
         key: 'attrs',
-        value: outputCtx.constantPool.getConstLiteral(o.literalArr(selectorAttributes.map(
-            value => value != null ? o.literal(value) : o.literal(undefined)))),
+        value: outputCtx.constantPool.getConstLiteral(
+            o.literalArr(selectorAttributes.map(
+                value => value != null ? o.literal(value) : o.literal(undefined))),
+            /* forceShared */ true),
         quoted: false
       });
     }
@@ -205,7 +207,8 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
     }
 
     if (attributes.length !== 0) {
-      parameters.push(this.constantPool.getConstLiteral(o.literalArr(attributes)));
+      parameters.push(
+          this.constantPool.getConstLiteral(o.literalArr(attributes), /* forceShared */ true));
     }
 
     this.instruction(this._creationMode, ast.sourceSpan, R3.createElement, ...parameters);
@@ -339,7 +342,9 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
 
   visitText(ast: TextAst) {
     // Text is defined in creation mode only.
-    this.instruction(this._creationMode, ast.sourceSpan, R3.textCreate, o.literal(ast.value));
+    this.instruction(
+        this._creationMode, ast.sourceSpan, R3.textCreate, o.literal(this.allocateNode()),
+        o.literal(ast.value));
   }
 
   // These should be handled in the template or element directly

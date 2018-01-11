@@ -99,7 +99,141 @@ describe('r3_view_compiler', () => {
     const result = compile(files, angularFiles);
     expect(result.source).toContain('@angular/core');
   });
+
+  /* These tests are codified version of the tests in compiler_canonical_spec.ts. Every
+   * test in compiler_canonical_spec.ts should have a corresponding test here.
+   */
+  describe('compiler conformance', () => {
+    describe('elements', () => {
+      it('sshould translate DOM structure', () => {
+        const files = {
+          app: {
+            'spec.ts': `
+                import {Component, NgModule} from '@angular/core';
+
+                @Component({
+                  selector: 'my-component',
+                  template: \`<div class="my-app" title="Hello">Hello <b>World</b>!</div>\`
+                })
+                export class MyComponent {}
+
+                @NgModule({declarations: [MyComponent]})
+                export class MyModule {}
+            `
+          }
+        };
+
+        // The factory should look like this:
+        const factory = 'factory: () => { return new MyComponent(); }';
+
+        // The template should look like this (where IDENT is a wild card for an identifier):
+        const template = `
+          template: (ctx: IDENT, cm: IDENT) => {
+            if (cm) {
+              IDENT.ɵE(0, 'div', IDENT);
+              IDENT.ɵT(1, 'Hello ');
+              IDENT.ɵE(2, 'b');
+              IDENT.ɵT(3, 'World');
+              IDENT.ɵe();
+              IDENT.ɵT(4, '!');
+              IDENT.ɵe();
+            }
+          }
+        `;
+
+        // The compiler should also emit a const array like this:
+        const constants = `
+          const IDENT = ['class', 'my-app', 'title', 'Hello'];
+        `;
+
+        const result = compile(files, angularFiles);
+
+        expectEmit(result.source, factory);
+        expectEmit(result.source, template);
+        expectEmit(result.source, constants);
+      });
+    });
+  });
 });
+
+const IDENTIFIER = /[A-Za-z_$ɵ][A-Za-z_$0-9]*/;
+const OPERATOR =
+    /!|%|\*|\/|\^|\&|\&\&\|\||\|\||\(|\)|\{|\}|\[|\]|:|;|\.|<|<=|>|>=|=|==|===|!=|!==|=>|\+|\+\+|-|--|@|,|\.|\.\.\./;
+const STRING = /\'[^'\n]*\'|"[^'\n]*"|`[^`]*`/;
+const NUMBER = /[0-9]+/;
+const TOKEN = new RegExp(
+    `^((${IDENTIFIER.source})|(${OPERATOR.source})|(${STRING.source})|${NUMBER.source})`);
+const WHITESPACE = /^\s+/;
+
+type Piece = string | RegExp;
+
+const IDENT = /[A-Za-z$_][A-Za-z0-9$_]*/;
+
+function tokenize(text: string): Piece[] {
+  function matches(exp: RegExp): string|false {
+    const m = text.match(exp);
+    if (!m) return false;
+    text = text.substr(m[0].length);
+    return m[0];
+  }
+  function next(): string {
+    const result = matches(TOKEN);
+    if (!result) {
+      throw Error(`Invalid test, no token found for '${text.substr(0, 30)}...'`);
+    }
+    matches(WHITESPACE);
+    return result;
+  }
+
+  const pieces: Piece[] = [];
+  matches(WHITESPACE);
+  while (text) {
+    const token = next();
+    if (token === 'IDENT') pieces.push(IDENT);
+    else pieces.push(token);
+  }
+  return pieces;
+}
+
+function expectEmit(source: string, emitted: string) {
+  const pieces = tokenize(emitted);
+  const expr = r(...pieces);
+  if (!expr.test(source)) {
+    let last: number = 0;
+    for (let i = 1; i < pieces.length; i++) {
+      let t = r(...pieces.slice(0, i));
+      let m = source.match(t);
+      let expected = pieces[i - 1] == IDENT ? '<IDENT>' : pieces[i - 1];
+      if (!m) {
+        fail(
+            `Expected to find ${expected} '${source.substr(last - 20, 20)}[<---HERE]${source.substr(last, 20)}'`);
+        break;
+      } else {
+        last = (m.index || 0) + m[0].length;
+      }
+    }
+    fail(
+        'Test helper failure: Expected expression failed but the reporting logic could not find where it failed');
+  }
+}
+
+const IDENT_LIKE = /^[a-z][A-Z]/;
+const SPECIAL_RE_CHAR = /\/|\(|\)|\||\*|\+|\[|\]|\{|\}/g;
+function r(...pieces: (string | RegExp)[]): RegExp {
+  let results: string[] = [];
+  let first = true;
+  for (const piece of pieces) {
+    if (!first)
+      results.push(`\\s${typeof piece === 'string' && IDENT_LIKE.test(piece) ? '+' : '*'}`);
+    first = false;
+    if (typeof piece === 'string') {
+      results.push(piece.replace(SPECIAL_RE_CHAR, s => '\\' + s));
+    } else {
+      results.push('(' + piece.source + ')');
+    }
+  }
+  return new RegExp(results.join(''));
+}
 
 function compile(
     data: MockDirectory, angularFiles: MockData, options: AotCompilerOptions = {},
@@ -205,8 +339,13 @@ function compile(
 
   const emitter = new TypeScriptEmitter();
 
+  const moduleName =
+      compilerHost.fileNameToModuleName(fakeOuputContext.genFilePath, fakeOuputContext.genFilePath);
+
   const result = emitter.emitStatementsAndContext(
-      fakeOuputContext.genFilePath, fakeOuputContext.statements, '', false);
+      fakeOuputContext.genFilePath, fakeOuputContext.statements, '', false,
+      /* referenceFilter */ undefined,
+      /* importFilter */ e => e.moduleName != null && e.moduleName.startsWith('/app'));
 
   return {source: result.sourceText, outputContext: fakeOuputContext};
 }
