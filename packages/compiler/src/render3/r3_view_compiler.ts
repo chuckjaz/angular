@@ -30,14 +30,36 @@ const CREATION_MODE_FLAG = 'cm';
 /** Name of the temporary to use during data binding */
 const TEMPORARY_NAME = '_t';
 
+export function compileDirctive(
+    outputCtx: OutputContext, directive: CompileDirectiveMetadata, reflector: CompileReflector) {
+  const definitionMapValues: {key: string, quoted: boolean, value: o.Expression}[] = [];
+
+  // e.g. `factory: () => new MyApp(injectElementRef())`
+  const templateFactory = createFactory(directive.type, outputCtx, reflector);
+  definitionMapValues.push({key: 'factory', value: templateFactory, quoted: false});
+
+  const className = identifierName(directive.type) !;
+  className || error(`Cannot resolver the name of ${directive.type}`);
+
+  // Create the partial class to be merged with the actual class.
+  outputCtx.statements.push(new o.ClassStmt(
+      /* name */ className,
+      /* parent */ null,
+      /* fields */[new o.ClassField(
+          /* name */ 'ngDirectiveDef',
+          /* type */ o.INFERRED_TYPE,
+          /* modifiers */[o.StmtModifier.Static],
+          /* initializer */ o.importExpr(R3.defineDirective).callFn([o.literalMap(
+              definitionMapValues)]))],
+      /* getters */[],
+      /* constructorMethod */ new o.ClassMethod(null, [], []),
+      /* methods */[]));
+}
+
 export function compileComponent(
     outputCtx: OutputContext, component: CompileDirectiveMetadata, template: TemplateAst[],
     reflector: CompileReflector) {
   const definitionMapValues: {key: string, quoted: boolean, value: o.Expression}[] = [];
-
-  // e.g. `type: MyApp`
-  definitionMapValues.push(
-      {key: 'type', value: outputCtx.importExpr(component.type.reference), quoted: false});
 
   // e.g. `tag: 'my-app'
   // This is optional and only included if the first selector of a component has element.
@@ -63,16 +85,16 @@ export function compileComponent(
     }
   }
 
+  // e.g. `factory: () => new MyApp(injectElementRef())`
+  const templateFactory = createFactory(component.type, outputCtx, reflector);
+  definitionMapValues.push({key: 'factory', value: templateFactory, quoted: false});
+
   // e.g. `template: function(_ctx, _cm) {...}`
   const templateFunctionExpression =
       new TemplateDefinitionBuilder(outputCtx, outputCtx.constantPool, CONTEXT_NAME)
           .buildTemplateFunction(template);
   definitionMapValues.push({key: 'template', value: templateFunctionExpression, quoted: false});
 
-
-  // e.g. `factory: () => new MyApp(injectElementRef())`
-  const templateFactory = createFactory(component.type, outputCtx, reflector);
-  definitionMapValues.push({key: 'factory', value: templateFactory, quoted: false});
 
   const className = identifierName(component.type) !;
   className || error(`Cannot resolver the name of ${component.type}`);
@@ -187,15 +209,31 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
   // TODO(chuckj): Implement ng-content
   visitNgContent = unknown;
 
+  private _computeDirectivesArray(directives: DirectiveAst[]) {
+    const directiveIndexMap = new Map<any, number>();
+    const directiveExpressions: o.Expression[] =
+        directives.filter(directive => !directive.directive.isComponent).map(directive => {
+          directiveIndexMap.set(directive.directive.type.reference, this.allocateDataSlot());
+          return this.typeReference(directive.directive.type.reference);
+        });
+    return {
+      directivesArray: this.constantPool.getConstLiteral(
+          o.literalArr(directiveExpressions), /* forceShared */ true),
+      directiveIndexMap
+    };
+  }
+
   visitElement(ast: ElementAst) {
     let bindingCount = 0;
-    const elementIndex = this.allocateNode();
+    const elementIndex = this.allocateDataSlot();
+    let componentIndex: number|undefined = undefined;
 
     // Element creation mode
     const component = findComponent(ast.directives);
     const parameters: o.Expression[] = [o.literal(elementIndex)];
     if (component) {
       parameters.push(this.typeReference(component.directive.type.reference));
+      componentIndex = this.allocateDataSlot();
     } else {
       parameters.push(o.literal(ast.name));
     }
@@ -205,6 +243,9 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
       attributes.push(o.literal(attr.name));
       attributes.push(o.literal(attr.value));
     }
+
+    const {directivesArray, directiveIndexMap} = this._computeDirectivesArray(ast.directives);
+    parameters.push(directivesArray);
 
     if (attributes.length !== 0) {
       parameters.push(
@@ -238,19 +279,28 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
     }
 
     // Generate directives input bindings
-    this._visitDirectives(ast.directives, implicit, elementIndex);
+    this._visitDirectives(ast.directives, implicit, elementIndex, directiveIndexMap);
+
+    // e.g. TodoComponentDef.r(0, 0);
+    if (component && componentIndex != null) {
+      this._refreshMode.push(
+          this.definitionOf(component.directive.type.reference, DefinitionKind.Component)
+              .callMethod(R3.REFRESH_METHOD, [o.literal(componentIndex), o.literal(elementIndex)])
+              .toStmt());
+    }
 
     // Traverse element child nodes
     templateVisitAll(this, ast.children);
-
 
     // Finish element construction mode.
     this.instruction(this._creationMode, ast.endSourceSpan || ast.sourceSpan, R3.elementEnd);
   }
 
-  private _visitDirectives(directives: DirectiveAst[], implicit: o.Expression, nodeIndex: number) {
+  private _visitDirectives(
+      directives: DirectiveAst[], implicit: o.Expression, nodeIndex: number,
+      directiveIndexMap: Map<any, number>) {
     for (let directive of directives) {
-      const directiveIndex = this.allocateDirective();
+      const directiveIndex = directiveIndexMap.get(directive.directive.type.reference);
 
       // Creation mode
       // e.g. D(0, TodoComponentDef.n(), TodoComponentDef);
@@ -262,12 +312,6 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
       // node is referenced multiple times to know that it must generate the reference into a
       // temporary.
 
-      this.instruction(
-          this._creationMode, directive.sourceSpan, R3.directiveCreate, o.literal(directiveIndex),
-          this.definitionOf(directiveType, kind)
-              .callMethod(R3.NEW_METHOD, [], directive.sourceSpan),
-          this.definitionOf(directiveType, kind));
-
       // Bindings
       for (const input of directive.inputs) {
         const convertedBinding = convertPropertyBinding(
@@ -277,39 +321,29 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
             this._bindingMode, directive.sourceSpan, R3.elementProperty,
             o.literal(input.templateName), o.literal(nodeIndex), convertedBinding.currValExpr);
       }
-
-      // e.g. TodoComponentDef.h(0, 0);
-      this._hostMode.push(
-          this.definitionOf(directiveType, kind)
-              .callMethod(R3.HOST_BINDING_METHOD, [o.literal(directiveIndex), o.literal(nodeIndex)])
-              .toStmt());
-
-      // e.g. TodoComponentDef.r(0, 0);
-      this._refreshMode.push(
-          this.definitionOf(directiveType, kind)
-              .callMethod(R3.REFRESH_METHOD, [o.literal(directiveIndex), o.literal(nodeIndex)])
-              .toStmt());
     }
   }
 
   visitEmbeddedTemplate(ast: EmbeddedTemplateAst) {
-    const templateIndex = this.allocateNode();
+    const templateIndex = this.allocateDataSlot();
 
     const templateName = `C${templateIndex}Template`;
     const templateContext = `ctx${this.level}`;
 
     // TODO(chuckj): attrs?
 
+    const {directivesArray, directiveIndexMap} = this._computeDirectivesArray(ast.directives);
+
     // e.g. C(1, C1Template)
     this.instruction(
         this._creationMode, ast.sourceSpan, R3.containerCreate, o.literal(templateIndex),
-        o.variable(templateName));
+        o.variable(templateName), directivesArray);
 
     // Generate directies
     this._visitDirectives(
         ast.directives, o.variable(this.contextParameter),
         // TODO(chuckj): This should be the element index of the element that contained the template
-        templateIndex);
+        templateIndex, directiveIndexMap);
 
     // Create the template function
     const templateVisitor = new TemplateDefinitionBuilder(
@@ -329,7 +363,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
   readonly visitAttr = invalid;
 
   visitBoundText(ast: BoundTextAst) {
-    const nodeIndex = this.allocateNode();
+    const nodeIndex = this.allocateDataSlot();
 
     // Creation mode
     this.instruction(this._creationMode, ast.sourceSpan, R3.textCreate, o.literal(nodeIndex));
@@ -343,7 +377,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
   visitText(ast: TextAst) {
     // Text is defined in creation mode only.
     this.instruction(
-        this._creationMode, ast.sourceSpan, R3.textCreate, o.literal(this.allocateNode()),
+        this._creationMode, ast.sourceSpan, R3.textCreate, o.literal(this.allocateDataSlot()),
         o.literal(ast.value));
   }
 
@@ -351,8 +385,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
   readonly visitDirective = invalid;
   readonly visitDirectiveProperty = invalid;
 
-  private allocateDirective() { return this._dataIndex++; }
-  private allocateNode() { return this._dataIndex++; }
+  private allocateDataSlot() { return this._dataIndex++; }
   private bindingContext() { return `${this._bindingContext++}`; }
 
   private instruction(

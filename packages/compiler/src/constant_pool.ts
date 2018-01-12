@@ -94,16 +94,22 @@ export class ConstantPool {
 }
 
 class KeyVisitor implements o.ExpressionVisitor {
-  visitLiteralExpr(ast: o.LiteralExpr): string { return `${ast.value}`; }
+  visitLiteralExpr(ast: o.LiteralExpr): string {
+    return `${typeof ast.value === 'string' ? '"' + ast.value + '"' : ast.value}`;
+  }
   visitLiteralArrayExpr(ast: o.LiteralArrayExpr): string {
-    return ast.entries.map(entry => entry.visitExpression(this, null)).join(',');
+    return `[${ast.entries.map(entry => entry.visitExpression(this, null)).join(',')}]`;
   }
 
   visitLiteralMapExpr(ast: o.LiteralMapExpr): string {
-    return `{${ast.entries.map(entry => ` ${entry.key}: $ {
-      entry.value.visitExpression(this, null)
-    }
-    `).join(',')}`;
+    const mapEntry = (entry: o.LiteralMapEntry) =>
+        `${entry.key}:${entry.value.visitExpression(this, null)}`;
+    return `{${ast.entries.map(mapEntry).join(',')}`;
+  }
+
+  visitExternalExpr(ast: o.ExternalExpr): string {
+    return ast.value.moduleName ? `EX:${ast.value.moduleName}:${ast.value.name}` :
+                                  `EX:${ast.value.runtime.name}`;
   }
 
   visitReadVarExpr = invalid;
@@ -113,7 +119,6 @@ class KeyVisitor implements o.ExpressionVisitor {
   visitInvokeMethodExpr = invalid;
   visitInvokeFunctionExpr = invalid;
   visitInstantiateExpr = invalid;
-  visitExternalExpr = invalid;
   visitConditionalExpr = invalid;
   visitNotExpr = invalid;
   visitAssertNotNullExpr = invalid;

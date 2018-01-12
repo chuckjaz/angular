@@ -6,13 +6,13 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {AotCompilerHost, AotCompilerOptions, AotSummaryResolver, CompileMetadataResolver, CompilerConfig, DirectiveNormalizer, DirectiveResolver, DomElementSchemaRegistry, HtmlParser, I18NHtmlParser, Lexer, NgModuleResolver, Parser, PipeResolver, StaticReflector, StaticSymbol, StaticSymbolCache, StaticSymbolResolver, TemplateParser, TypeScriptEmitter, analyzeNgModules, createAotUrlResolver} from '@angular/compiler';
+import {AotCompilerHost, AotCompilerOptions, AotSummaryResolver, CompileDirectiveMetadata, CompileMetadataResolver, CompilerConfig, DirectiveNormalizer, DirectiveResolver, DomElementSchemaRegistry, HtmlParser, I18NHtmlParser, Lexer, NgModuleResolver, Parser, PipeResolver, StaticReflector, StaticSymbol, StaticSymbolCache, StaticSymbolResolver, TemplateParser, TypeScriptEmitter, analyzeNgModules, createAotUrlResolver} from '@angular/compiler';
 import {ViewEncapsulation} from '@angular/core';
 import * as ts from 'typescript';
 
 import {ConstantPool} from '../../src/constant_pool';
 import * as o from '../../src/output/output_ast';
-import {compileComponent} from '../../src/render3/r3_view_compiler';
+import {compileComponent, compileDirctive} from '../../src/render3/r3_view_compiler';
 import {OutputContext} from '../../src/util';
 import {MockAotCompilerHost, MockCompilerHost, MockData, MockDirectory, arrayToMockDir, settings, setup, toMockFileArray} from '../aot/test_util';
 
@@ -105,7 +105,7 @@ describe('r3_view_compiler', () => {
    */
   describe('compiler conformance', () => {
     describe('elements', () => {
-      it('sshould translate DOM structure', () => {
+      it('should translate DOM structure', () => {
         const files = {
           app: {
             'spec.ts': `
@@ -154,6 +154,83 @@ describe('r3_view_compiler', () => {
       });
     });
   });
+
+  describe('components & directives', () => {
+    it('should instantiate directives', () => {
+      const files = {
+        app: {
+          'spec.ts': `
+            import {Component, Directive, NgModule} from '@angular/core';
+
+            @Component({selector: 'child', template: 'child-view'})
+            export class ChildComponent {}
+
+            @Directive({selector: '[some-directive]'})
+            export class SomeDirective {}
+
+            @Component({selector: 'my-component', template: '<child some-directive></child>!'})
+            export class MyComponent {}
+
+            @NgModule({declarations: [ChildComponent, SomeDirective, MyComponent]})
+            export class MyModule{}
+          `
+        }
+      };
+
+      // ChildComponent definition should be:
+      const ChildComponentDefinition = `
+        static ngComponentDef = IDENT.ɵdefineComponent({
+          tag: 'child',
+          factory: () => { return new ChildComponent(); },
+          template: (ctx: IDENT, cm: IDENT) => {
+            if (cm) {
+              IDENT.ɵT(0, 'child-view');
+            }
+          }
+        });`;
+
+      // SomeDirective defintion should be:
+      const SomeDirectiveDefintion = `
+        static ngDirectiveDef = IDENT.ɵdefineDirective({
+          factory: () => {return new SomeDirective(); }
+        });
+      `;
+
+      // MyComponent defintion should be:
+      const MyComponentDefintion = `
+        static ngComponentDef = IDENT.ɵdefineComponent({
+          tag: 'my-component',
+          factory: () => { return new MyComponent(); },
+          template: (ctx: IDENT, cm: IDENT) => {
+            if (cm) {
+              IDENT.ɵE(0, ChildComponent, IDENT, IDENT);
+              IDENT.ɵe();
+              IDENT.ɵT(3, '!');
+            }
+            ChildComponent.ngComponentDef.r(1, 0);
+          }
+        });
+      `;
+
+      // The following constants should be emitted as well.
+      const AttributesConstant = `
+        const IDENT = ['some-directive', ''];
+      `;
+
+      const DirectivesConstant = `
+        const IDENT = [SomeDirective];
+      `;
+
+      const result = compile(files, angularFiles);
+      const source = result.source;
+
+      expectEmit(source, ChildComponentDefinition);
+      expectEmit(source, SomeDirectiveDefintion);
+      expectEmit(source, MyComponentDefintion);
+      expectEmit(source, AttributesConstant);
+      expectEmit(source, DirectivesConstant);
+    });
+  });
 });
 
 const IDENTIFIER = /[A-Za-z_$ɵ][A-Za-z_$0-9]*/;
@@ -189,12 +266,15 @@ function tokenize(text: string): Piece[] {
   matches(WHITESPACE);
   while (text) {
     const token = next();
-    if (token === 'IDENT') pieces.push(IDENT);
-    else pieces.push(token);
+    if (token === 'IDENT')
+      pieces.push(IDENT);
+    else
+      pieces.push(token);
   }
   return pieces;
 }
 
+const contextWidth = 100;
 function expectEmit(source: string, emitted: string) {
   const pieces = tokenize(emitted);
   const expr = r(...pieces);
@@ -205,9 +285,10 @@ function expectEmit(source: string, emitted: string) {
       let m = source.match(t);
       let expected = pieces[i - 1] == IDENT ? '<IDENT>' : pieces[i - 1];
       if (!m) {
+        const contextPieceWidth = contextWidth / 2;
         fail(
-            `Expected to find ${expected} '${source.substr(last - 20, 20)}[<---HERE]${source.substr(last, 20)}'`);
-        break;
+            `Expected to find ${expected} '${source.substr(last - contextPieceWidth, contextPieceWidth)}[<---HERE]${source.substr(last, contextPieceWidth)}'`);
+        return;
       } else {
         last = (m.index || 0) + m[0].length;
       }
@@ -316,7 +397,10 @@ function compile(
 
   // Compile the directives.
   for (const directive of directives) {
-    const module = analyzedModules.ngModuleByPipeOrDirective.get(directive) !;
+    const module = analyzedModules.ngModuleByPipeOrDirective.get(directive);
+    if (!module || !module.type.reference.filePath.startsWith('/app')) {
+      continue;
+    }
     if (resolver.isDirective(directive)) {
       const metadata = resolver.getDirectiveMetadata(directive);
       if (metadata.isComponent) {
@@ -331,6 +415,8 @@ function compile(
             metadata, htmlAst, directives, pipes, module.schemas, fakeUrl, false);
 
         compileComponent(fakeOuputContext, metadata, parsedTemplate.template, staticReflector);
+      } else {
+        compileDirctive(fakeOuputContext, metadata, staticReflector);
       }
     }
   }

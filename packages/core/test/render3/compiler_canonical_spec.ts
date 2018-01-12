@@ -71,7 +71,7 @@ describe('compiler specification', () => {
       }
 
       @Directive({
-        selector: 'some-directive',
+        selector: '[some-directive]',
       })
       class SomeDirective {
         constructor() { log.push('SomeDirective'); }

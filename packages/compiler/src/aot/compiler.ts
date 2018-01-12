@@ -19,7 +19,7 @@ import {NgModuleCompiler} from '../ng_module_compiler';
 import {OutputEmitter} from '../output/abstract_emitter';
 import * as o from '../output/output_ast';
 import {ParseError} from '../parse_util';
-import {compileComponent as compileIvyComponent} from '../render3/r3_view_compiler';
+import {compileComponent as compileIvyComponent, compileDirctive as compileIvyDirective} from '../render3/r3_view_compiler';
 import {CompiledStylesheet, StyleCompiler} from '../style_compiler';
 import {SummaryResolver} from '../summary_resolver';
 import {TemplateAst} from '../template_parser/template_ast';
@@ -337,6 +337,8 @@ export class AotCompiler {
         const {template: parsedTemplate, pipes: usedPipes} =
             this._parseTemplate(directiveMetadata, module, module.transitiveModule.directives);
         compileIvyComponent(context, directiveMetadata, parsedTemplate, this._reflector);
+      } else {
+        compileIvyDirective(context, directiveMetadata, this._reflector);
       }
     });
 
