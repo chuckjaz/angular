@@ -285,7 +285,7 @@ describe('r3_view_compiler', () => {
           }
         });`;
       const locals = `const IDENT = ['foo', ''];`;
-      const directives = `const IDENT = [IfDirective];`
+      const directives = `const IDENT = [IfDirective];`;
 
       const result = compile(files, angularFiles);
       const source = result.source;
@@ -294,6 +294,48 @@ describe('r3_view_compiler', () => {
       expectEmit(source, MyComponentDefinition);
       expectEmit(source, locals);
       expectEmit(source, directives);
+    });
+
+    it('local reference', () => {
+      const files = {
+        app: {
+          'spec.ts': `
+            import {Component, NgModule} from '@angular/core';
+
+            @Component({selector: 'my-component', template: '<input #user>Hello {{user.value}}!'})
+            export class MyComponent {}
+
+            @NgModule({declarations: [MyComponent]})
+            export class MyModule {}
+          `
+        }
+      };
+
+      const MyComponentDefintion = `
+        static ngComponentDef = IDENT.ɵdefineComponent({
+          tag: 'my-component',
+          factory: () => { return new MyComponent(); },
+          template: (ctx: IDENT, cm: IDENT) => {
+            if (cm) {
+              IDENT.ɵE(0, 'input', null, null, IDENT);
+              IDENT.ɵe();
+              IDENT.ɵT(2);
+            }
+            const IDENT = IDENT.ɵm(1);
+            IDENT.ɵt(2, IDENT.ɵb1('Hello ', IDENT.value, '!'));
+          }
+        });
+      `;
+
+      const locals = `
+        const IDENT = ['user', ''];
+      `;
+
+      const result = compile(files, angularFiles);
+      const source = result.source;
+
+      expectEmit(source, MyComponentDefintion);
+      expectEmit(source, locals);
     });
   });
 });
