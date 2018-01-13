@@ -112,7 +112,7 @@ describe('compiler specification', () => {
     xit('should support structural directives', () => {
       const log: string[] = [];
       @Directive({
-        selector: 'if',
+        selector: '[if]',
       })
       class IfDirective {
         constructor(template: TemplateRef<any>) { log.push('ifDirective'); }

@@ -6,7 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {CompileDirectiveMetadata, CompilePipeSummary, CompileTokenMetadata, CompileTypeMetadata, identifierName, rendererTypeName, tokenReference, viewClassName} from '../compile_metadata';
+import {CompileDirectiveMetadata, CompilePipeSummary, CompileTokenMetadata, CompileTypeMetadata, flatten, identifierName, rendererTypeName, tokenReference, viewClassName} from '../compile_metadata';
 import {CompileReflector} from '../compile_reflector';
 import {BindingForm, BuiltinConverter, EventHandlerVars, LocalResolver, convertActionBinding, convertPropertyBinding, convertPropertyBindingBuiltins} from '../compiler_util/expression_converter';
 import {ConstantPool, DefinitionKind} from '../constant_pool';
@@ -21,6 +21,7 @@ import {OutputContext} from '../util';
 import {Identifiers as R3} from './r3_identifiers';
 
 
+
 /** Name of the context parameter passed into a template function */
 const CONTEXT_NAME = 'ctx';
 
@@ -29,6 +30,9 @@ const CREATION_MODE_FLAG = 'cm';
 
 /** Name of the temporary to use during data binding */
 const TEMPORARY_NAME = '_t';
+
+/** The prefix reference variables */
+const REFERENCE_PREFIX = '_r';
 
 export function compileDirctive(
     outputCtx: OutputContext, directive: CompileDirectiveMetadata, reflector: CompileReflector) {
@@ -91,7 +95,8 @@ export function compileComponent(
 
   // e.g. `template: function(_ctx, _cm) {...}`
   const templateFunctionExpression =
-      new TemplateDefinitionBuilder(outputCtx, outputCtx.constantPool, CONTEXT_NAME)
+      new TemplateDefinitionBuilder(
+          outputCtx, outputCtx.constantPool, CONTEXT_NAME, ROOT_SCOPE.nestedScope())
           .buildTemplateFunction(template);
   definitionMapValues.push({key: 'template', value: templateFunctionExpression, quoted: false});
 
@@ -160,9 +165,49 @@ function interpolate(args: o.Expression[]): o.Expression {
   return o.importExpr(R3.bindV).callFn(args);
 }
 
-class TemplateDefinitionBuilder implements TemplateAstVisitor {
+class BindingScope {
+  private map = new Map<string, o.Expression>();
+  private referenceNameIndex = 0;
+
+  constructor(private parent: BindingScope|null) {}
+
+  get(name: string): o.Expression|null {
+    let current: BindingScope|null = this;
+    while (current) {
+      const value = current.map.get(name);
+      if (value != null) {
+        // Cache the value locally.
+        this.map.set(name, value);
+        return value;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+
+  set(name: string, variableName: string): BindingScope {
+    !this.map.has(name) ||
+        error(`The name ${name} is already defined in scope to be ${this.map.get(name)}`);
+    this.map.set(name, o.variable(variableName));
+    return this;
+  }
+
+  nestedScope(): BindingScope { return new BindingScope(this); }
+
+  freshReferenceName(): string {
+    let current: BindingScope|null = this;
+    // Find the top scope as it maintains the global reference count
+    while (current.parent) current = current.parent;
+    return `${REFERENCE_PREFIX}${current.referenceNameIndex++}`;
+  }
+}
+
+const ROOT_SCOPE = new BindingScope(null).set('$event', '$event');
+
+class TemplateDefinitionBuilder implements TemplateAstVisitor, LocalResolver {
   private _dataIndex = 0;
   private _bindingContext = 0;
+  private _referenceIndex = 0;
   private _temporaryAllocated = false;
   private _prefix: o.Statement[] = [];
   private _creationMode: o.Statement[] = [];
@@ -175,7 +220,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
 
   constructor(
       private outputCtx: OutputContext, private constantPool: ConstantPool,
-      private contextParameter: string, private level = 0) {}
+      private contextParameter: string, private bindingScope: BindingScope, private level = 0) {}
 
   buildTemplateFunction(asts: TemplateAst[]): o.FunctionExpr {
     templateVisitAll(this, asts);
@@ -206,6 +251,8 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
         o.INFERRED_TYPE);
   }
 
+  getLocal(name: string): o.Expression|null { return this.bindingScope.get(name); }
+
   // TODO(chuckj): Implement ng-content
   visitNgContent = unknown;
 
@@ -217,8 +264,10 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
           return this.typeReference(directive.directive.type.reference);
         });
     return {
-      directivesArray: this.constantPool.getConstLiteral(
-          o.literalArr(directiveExpressions), /* forceShared */ true),
+      directivesArray: directiveExpressions.length ?
+          this.constantPool.getConstLiteral(
+              o.literalArr(directiveExpressions), /* forceShared */ true) :
+          o.literal(null),
       directiveIndexMap
     };
   }
@@ -227,29 +276,65 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
     let bindingCount = 0;
     const elementIndex = this.allocateDataSlot();
     let componentIndex: number|undefined = undefined;
+    const referenceDataSlots = new Map<string, number>();
 
     // Element creation mode
     const component = findComponent(ast.directives);
     const parameters: o.Expression[] = [o.literal(elementIndex)];
-    if (component) {
-      parameters.push(this.typeReference(component.directive.type.reference));
-      componentIndex = this.allocateDataSlot();
-    } else {
-      parameters.push(o.literal(ast.name));
+
+    // Parameters of an element has a variable number of parameters
+    // and if one is not specified it should either be elided (if
+    // no other parameters are specified) or replaced with null. This
+    // routine manages this.
+    function addParameter(index: number, expression: o.Expression) {
+      while (parameters.length < index) {
+        parameters.push(o.literal(null, o.INFERRED_TYPE));
+      }
+      parameters.push(expression);
+      parameters.length == index + 1 || error('incorrect building of component parameters');
     }
 
+    // Add component type or element tag
+    if (component) {
+      addParameter(1, this.typeReference(component.directive.type.reference));
+      componentIndex = this.allocateDataSlot();
+    } else {
+      addParameter(1, o.literal(ast.name));
+    }
+
+    // Add attributes array
     const attributes: o.Expression[] = [];
     for (let attr of ast.attrs) {
       attributes.push(o.literal(attr.name));
       attributes.push(o.literal(attr.value));
     }
+    if (attributes.length > 0) {
+      addParameter(
+          2, this.constantPool.getConstLiteral(o.literalArr(attributes), /* forceShared */ true));
+    }
 
+    // Add directives array
     const {directivesArray, directiveIndexMap} = this._computeDirectivesArray(ast.directives);
-    parameters.push(directivesArray);
+    if (directiveIndexMap.size > 0) {
+      addParameter(3, directivesArray);
+    }
 
-    if (attributes.length !== 0) {
-      parameters.push(
-          this.constantPool.getConstLiteral(o.literalArr(attributes), /* forceShared */ true));
+    // Add references array
+    if (ast.references && ast.references.length > 0) {
+      const references =
+          flatten(ast.references.map(reference => {
+            const slot = this.allocateDataSlot();
+            referenceDataSlots.set(reference.name, slot);
+            // Generate the update temporary.
+            const variableName = this.bindingScope.freshReferenceName();
+            this._bindingMode.push(o.variable(variableName, o.INFERRED_TYPE)
+                                       .set(o.importExpr(R3.memory).callFn([o.literal(slot)]))
+                                       .toDeclStmt(o.INFERRED_TYPE, [o.StmtModifier.Final]));
+            this.bindingScope.set(reference.name, variableName);
+            return [reference.name, reference.originalValue];
+          })).map(value => o.literal(value));
+      addParameter(
+          4, this.constantPool.getConstLiteral(o.literalArr(references), /* forceShared */ true));
     }
 
     this.instruction(this._creationMode, ast.sourceSpan, R3.createElement, ...parameters);
@@ -263,7 +348,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
       }
       // TODO(chuckj): Builtins transform?
       const convertedBinding = convertPropertyBinding(
-          null, implicit, input.value, this.bindingContext(), BindingForm.TrySimple, interpolate);
+          this, implicit, input.value, this.bindingContext(), BindingForm.TrySimple, interpolate);
       this._bindingMode.push(...convertedBinding.stmts);
       const parameters =
           [o.literal(elementIndex), o.literal(input.name), convertedBinding.currValExpr];
@@ -315,7 +400,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
       // Bindings
       for (const input of directive.inputs) {
         const convertedBinding = convertPropertyBinding(
-            null, implicit, input.value, this.bindingContext(), BindingForm.TrySimple, interpolate);
+            this, implicit, input.value, this.bindingContext(), BindingForm.TrySimple, interpolate);
         this._bindingMode.push(...convertedBinding.stmts);
         this.instruction(
             this._bindingMode, directive.sourceSpan, R3.elementProperty,
@@ -330,29 +415,27 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
     const templateName = `C${templateIndex}Template`;
     const templateContext = `ctx${this.level}`;
 
-    // TODO(chuckj): attrs?
-
     const {directivesArray, directiveIndexMap} = this._computeDirectivesArray(ast.directives);
 
     // e.g. C(1, C1Template)
     this.instruction(
         this._creationMode, ast.sourceSpan, R3.containerCreate, o.literal(templateIndex),
-        o.variable(templateName), directivesArray);
+        directivesArray, o.variable(templateName));
+
+    // e.g. Cr(1)
+    this.instruction(
+        this._refreshMode, ast.sourceSpan, R3.containerRefreshStart, o.literal(templateIndex));
 
     // Generate directies
     this._visitDirectives(
-        ast.directives, o.variable(this.contextParameter),
-        // TODO(chuckj): This should be the element index of the element that contained the template
-        templateIndex, directiveIndexMap);
+        ast.directives, o.variable(this.contextParameter), templateIndex, directiveIndexMap);
 
     // Create the template function
     const templateVisitor = new TemplateDefinitionBuilder(
-        this.outputCtx, this.constantPool, templateContext, this.level + 1);
+        this.outputCtx, this.constantPool, templateContext, this.bindingScope.nestedScope(),
+        this.level + 1);
     const templateFunctionExpr = templateVisitor.buildTemplateFunction(ast.children);
     this._postfix.push(templateFunctionExpr.toDeclStmt(templateName, null));
-
-    // Terminate the definition
-    this.instruction(this._creationMode, ast.sourceSpan, R3.containerEnd);
   }
 
   // These should be handled in the template or element directly.
@@ -371,7 +454,7 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
     // Refresh mode
     this.instruction(
         this._refreshMode, ast.sourceSpan, R3.textCreateBound, o.literal(nodeIndex),
-        this.bind(o.variable(this.contextParameter), ast.value, ast.sourceSpan));
+        this.bind(o.variable(CONTEXT_NAME), ast.value, ast.sourceSpan));
   }
 
   visitText(ast: TextAst) {
@@ -412,13 +495,13 @@ class TemplateDefinitionBuilder implements TemplateAstVisitor {
 
   private convertPropertyBinding(implicit: o.Expression, value: AST): o.Expression {
     const convertedPropertyBinding = convertPropertyBinding(
-        null, implicit, value, this.bindingContext(), BindingForm.TrySimple, interpolate);
+        this, implicit, value, this.bindingContext(), BindingForm.TrySimple, interpolate);
     this._refreshMode.push(...convertedPropertyBinding.stmts);
     return convertedPropertyBinding.currValExpr;
   }
 
   private bind(implicit: o.Expression, value: AST, sourceSpan: ParseSourceSpan): o.Expression {
-    return o.importExpr(R3.bind).callFn([this.convertPropertyBinding(implicit, value)]);
+    return this.convertPropertyBinding(implicit, value);
   }
 }
 

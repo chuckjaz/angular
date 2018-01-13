@@ -10,6 +10,8 @@ import * as o from './output/output_ast';
 import {error} from './parse_util';
 import {OutputContext} from './util';
 
+const CONSTANT_PREFIX = '_c';
+
 export const enum DefinitionKind {Injector, Directive, Component}
 
 class FixupExpression extends o.Expression {
@@ -86,7 +88,7 @@ export class ConstantPool {
 
   uniqueName(prefix: string): string { return `${prefix}${this.nextNameIndex++}`; }
 
-  private freshName(): string { return this.uniqueName(`_$`); }
+  private freshName(): string { return this.uniqueName(CONSTANT_PREFIX); }
 
   private keyOf(expression: o.Expression) {
     return expression.visitExpression(new KeyVisitor(), null);

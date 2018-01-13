@@ -8,6 +8,7 @@
 
 import {AotCompilerHost, AotCompilerOptions, AotSummaryResolver, CompileDirectiveMetadata, CompileMetadataResolver, CompilerConfig, DirectiveNormalizer, DirectiveResolver, DomElementSchemaRegistry, HtmlParser, I18NHtmlParser, Lexer, NgModuleResolver, Parser, PipeResolver, StaticReflector, StaticSymbol, StaticSymbolCache, StaticSymbolResolver, TemplateParser, TypeScriptEmitter, analyzeNgModules, createAotUrlResolver} from '@angular/compiler';
 import {ViewEncapsulation} from '@angular/core';
+import {directive} from 'core/src/render3/instructions';
 import * as ts from 'typescript';
 
 import {ConstantPool} from '../../src/constant_pool';
@@ -230,10 +231,74 @@ describe('r3_view_compiler', () => {
       expectEmit(source, AttributesConstant);
       expectEmit(source, DirectivesConstant);
     });
+
+    it('should support structural directives', () => {
+      const files = {
+        app: {
+          'spec.ts': `
+            import {Component, Directive, NgModule, TemplateRef} from '@angular/core';
+
+            @Directive({selector: '[if]'})
+            export class IfDirective {
+              constructor(template: TemplateRef<any>) { }
+            }
+
+            @Component({
+              selector: 'my-component',
+              template: '<ul #foo><li *if>{{salutation}} {{foo}}</li></ul>'
+            })
+            export class MyComponent {
+              salutation = 'Hello';
+            }
+
+            @NgModule({declarations: [IfDirective, MyComponent]})
+            export class MyModule {}
+            `
+        }
+      };
+
+      const IfDirectiveDefinition = `
+        static ngDirectiveDef = IDENT.ɵdefineDirective({
+          factory: () => { return new IfDirective(IDENT.ɵinjectTemplateRef()); }
+        });`;
+      const MyComponentDefinition = `
+        static ngComponentDef = IDENT.ɵdefineComponent({
+          tag: 'my-component',
+          factory: () => { return new MyComponent(); },
+          template: (ctx: IDENT, cm: IDENT) => {
+            if (cm) {
+              IDENT.ɵE(0, 'ul', null, null, IDENT);
+              IDENT.ɵC(2, IDENT, C2Template);
+              IDENT.ɵe();
+            }
+            const IDENT = IDENT.ɵm(1);
+            IDENT.ɵcR(2);
+
+            function C2Template(ctx0: IDENT, cm: IDENT) {
+              if (cm) {
+                IDENT.ɵE(0, 'li');
+                IDENT.ɵT(1);
+                IDENT.ɵe();
+              }
+              IDENT.ɵt(1, IDENT.ɵb2('', ctx.salutation, ' ', IDENT, ''));
+            }
+          }
+        });`;
+      const locals = `const IDENT = ['foo', ''];`;
+      const directives = `const IDENT = [IfDirective];`
+
+      const result = compile(files, angularFiles);
+      const source = result.source;
+
+      expectEmit(source, IfDirectiveDefinition);
+      expectEmit(source, MyComponentDefinition);
+      expectEmit(source, locals);
+      expectEmit(source, directives);
+    });
   });
 });
 
-const IDENTIFIER = /[A-Za-z_$ɵ][A-Za-z_$0-9]*/;
+const IDENTIFIER = /[A-Za-z_$ɵ][A-Za-z0-9_$]*/;
 const OPERATOR =
     /!|%|\*|\/|\^|\&|\&\&\|\||\|\||\(|\)|\{|\}|\[|\]|:|;|\.|<|<=|>|>=|=|==|===|!=|!==|=>|\+|\+\+|-|--|@|,|\.|\.\.\./;
 const STRING = /\'[^'\n]*\'|"[^'\n]*"|`[^`]*`/;
@@ -287,7 +352,7 @@ function expectEmit(source: string, emitted: string) {
       if (!m) {
         const contextPieceWidth = contextWidth / 2;
         fail(
-            `Expected to find ${expected} '${source.substr(last - contextPieceWidth, contextPieceWidth)}[<---HERE]${source.substr(last, contextPieceWidth)}'`);
+            `Expected to find ${expected} '${source.substr(0,last)}[<---HERE]${source.substr(last)}'`);
         return;
       } else {
         last = (m.index || 0) + m[0].length;
