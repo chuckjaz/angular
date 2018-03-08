@@ -21,8 +21,6 @@ import {OutputContext, error} from '../util';
 
 import {Identifiers as R3} from './r3_identifiers';
 
-
-
 /** Name of the context parameter passed into a template function */
 const CONTEXT_NAME = 'ctx';
 
@@ -63,12 +61,21 @@ export function compileDirective(
   outputCtx.statements.push(new o.ClassStmt(
       /* name */ className,
       /* parent */ null,
-      /* fields */[new o.ClassField(
-          /* name */ outputCtx.constantPool.propertyNameOf(DefinitionKind.Directive),
-          /* type */ o.INFERRED_TYPE,
-          /* modifiers */[o.StmtModifier.Static],
-          /* initializer */ o.importExpr(R3.defineDirective).callFn([o.literalMap(
-              definitionMapValues)]))],
+      /* fields */
+      [
+        new o.ClassField(
+            /* name */ outputCtx.constantPool.propertyNameOf(DefinitionKind.Directive),
+            /* type */ o.INFERRED_TYPE,
+            /* modifiers */[o.StmtModifier.Static],
+            /* initializer */ o.importExpr(R3.defineDirective).callFn([o.literalMap(
+                definitionMapValues)])),
+        ...(directive.selector ? [new o.ClassField(
+                                     /* name */ 'ngSelector',
+                                     /* type */ o.INFERRED_TYPE,
+                                     /* modifiers */[o.StmtModifier.Static, o.StmtModifier.Hidden],
+                                     /* initializer */ o.literal(directive.selector))] :
+                                 [])
+      ],
       /* getters */[],
       /* constructorMethod */ new o.ClassMethod(null, [], []),
       /* methods */[]));
@@ -152,17 +159,25 @@ export function compileComponent(
   outputCtx.statements.push(new o.ClassStmt(
       /* name */ className,
       /* parent */ null,
-      /* fields */[new o.ClassField(
-          /* name */ outputCtx.constantPool.propertyNameOf(DefinitionKind.Component),
-          /* type */ o.INFERRED_TYPE,
-          /* modifiers */[o.StmtModifier.Static],
-          /* initializer */ o.importExpr(R3.defineComponent).callFn([o.literalMap(
-              definitionMapValues)]))],
+      /* fields */
+      [
+        new o.ClassField(
+            /* name */ outputCtx.constantPool.propertyNameOf(DefinitionKind.Component),
+            /* type */ o.INFERRED_TYPE,
+            /* modifiers */[o.StmtModifier.Static],
+            /* initializer */ o.importExpr(R3.defineComponent).callFn([o.literalMap(
+                definitionMapValues)])),
+        ...(component.selector ? [new o.ClassField(
+                                     /* name */ 'ngSelector',
+                                     /* type */ o.INFERRED_TYPE,
+                                     /* modifiers */[o.StmtModifier.Static, o.StmtModifier.Hidden],
+                                     /* initializer */ o.literal(component.selector))] :
+                                 [])
+      ],
       /* getters */[],
       /* constructorMethod */ new o.ClassMethod(null, [], []),
       /* methods */[]));
 }
-
 
 // TODO: Remove these when the things are fully supported
 function unknown<T>(arg: o.Expression | o.Statement | TemplateAst): never {

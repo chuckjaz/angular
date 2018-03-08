@@ -38,12 +38,21 @@ export function compilePipe(
   outputCtx.statements.push(new o.ClassStmt(
       /* name */ className,
       /* parent */ null,
-      /* fields */[new o.ClassField(
-          /* name */ outputCtx.constantPool.propertyNameOf(DefinitionKind.Pipe),
-          /* type */ o.INFERRED_TYPE,
-          /* modifiers */[o.StmtModifier.Static],
-          /* initializer */ o.importExpr(R3.definePipe).callFn([o.literalMap(
-              definitionMapValues)]))],
+      /* fields */
+      [
+        new o.ClassField(
+            /* name */ outputCtx.constantPool.propertyNameOf(DefinitionKind.Pipe),
+            /* type */ o.INFERRED_TYPE,
+            /* modifiers */[o.StmtModifier.Static],
+            /* initializer */ o.importExpr(R3.definePipe).callFn([o.literalMap(
+                definitionMapValues)])),
+        ...(pipe.name ? [new o.ClassField(
+                            /* name */ 'ngSelector',
+                            /* type */ o.INFERRED_TYPE,
+                            /* modifiers */[o.StmtModifier.Static, o.StmtModifier.Hidden],
+                            /* initializer */ o.literal(pipe.name))] :
+                        [])
+      ],
       /* getters */[],
       /* constructorMethod */ new o.ClassMethod(null, [], []),
       /* methods */[]));
