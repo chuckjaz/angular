@@ -1020,7 +1020,7 @@ function mergeEmitResults(emitResults: ts.EmitResult[]): ts.EmitResult {
   for (const er of emitResults) {
     diagnostics.push(...er.diagnostics);
     emitSkipped = emitSkipped || er.emitSkipped;
-    emittedFiles.push(...er.emittedFiles);
+    emittedFiles.push(...(er.emittedFiles || []));
   }
   return {diagnostics, emitSkipped, emittedFiles};
 }

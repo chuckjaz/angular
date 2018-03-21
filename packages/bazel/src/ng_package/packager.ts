@@ -248,7 +248,7 @@ function createMetadataReexportFile(destDir: string, entryPointName: string) {
 function createTypingsReexportFile(destDir: string, entryPointName: string, license: string) {
   // Format carefully to match existing build.sh output:
   // LICENSE SPACE NEWLINE SPACE EXPORT NEWLINE
-  const content = `${license} \n export * from \'./${entryPointName}/${entryPointName}\n`;
+  const content = `${license} \n export * from \'./${entryPointName}/${entryPointName}\';\n`;
   fs.writeFileSync(path.join(destDir, `${entryPointName}.d.ts`), content);
 }
 
